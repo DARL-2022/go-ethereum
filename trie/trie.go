@@ -984,4 +984,7 @@ func (t *Trie) inspectTrieNodes(n node, tir *TrieInspectResult, wg *sync.WaitGro
 		fmt.Println("ERROR: unknown trie node type? node:", n)
 		os.Exit(1)
 	}
+// print trie nodes details in human readable form (jmlee)
+func (t *Trie) Print() {
+	fmt.Println(t.root.toString("", t.db))
 }

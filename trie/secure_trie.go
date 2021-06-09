@@ -344,4 +344,7 @@ func (t *SecureTrie) InspectTrie() TrieInspectResult {
 
 func (t *SecureTrie) InspectStorageTrie() TrieInspectResult {
 	return t.trie.InspectStorageTrie()
+// print trie nodes details in human readable form (jmlee)
+func (t *SecureTrie) Print() {
+	t.trie.Print()
 }
