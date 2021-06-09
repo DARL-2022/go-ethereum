@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"sort"
 	"time"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -516,6 +517,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		return obj
 	}
 	// If no live objects are available, attempt to use snapshots
+	// here is where a snapshot works (jmlee)
 	var (
 		data *types.StateAccount
 		err  error
@@ -525,7 +527,15 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			defer func(start time.Time) { s.SnapshotAccountReads += time.Since(start) }(time.Now())
 		}
 		var acc *snapshot.Account
-		if acc, err = s.snap.Account(crypto.HashData(s.hasher, addr.Bytes())); err == nil {
+
+		// change key to make compactTrie (jmlee)
+		key, doExist := common.AddrToKey[addr]
+		if !doExist {
+			key = common.NoExistKey
+		}
+		fmt.Println("Try to find account at the snapshot -> addr:", addr.Hex(), "/ key:", key.Hex())
+		if acc, err = s.snap.Account(key); err == nil {
+		// if acc, err = s.snap.Account(crypto.HashData(s.hasher, addr.Bytes())); err == nil { // -> original code
 			if acc == nil {
 				return nil
 			}
@@ -589,6 +599,15 @@ func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
+
+	// insert to map to make compactTrie (jmlee)
+	_, doExist := common.AddrToKey[addr]
+	if !doExist {
+		fmt.Println("make new account -> addr:", addr.Hex(), "/ keyHash:", common.HexToHash(strconv.FormatInt(common.AccountCounter, 16)))
+		common.AddrToKey[addr] = common.HexToHash(strconv.FormatInt(common.AccountCounter, 16))
+		common.AccountCounter += 1
+	}
+	
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 
 	var prevdestruct bool
