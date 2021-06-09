@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
@@ -347,4 +348,19 @@ func (t *SecureTrie) InspectStorageTrie() TrieInspectResult {
 // print trie nodes details in human readable form (jmlee)
 func (t *SecureTrie) Print() {
 	t.trie.Print()
+}
+
+// make empty secure trie (jmlee)
+func NewEmptySecure() *SecureTrie {
+	trie, _ := NewSecure(common.Hash{}, NewDatabase(memorydb.New()))
+	return trie
+}
+
+// get trie of secure trie (jmlee)
+func (t *SecureTrie) Trie() *Trie {
+	return &t.trie
+}
+
+func (t *SecureTrie) MyCommit() {
+	t.trie.MyCommit()
 }
