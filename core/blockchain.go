@@ -1356,6 +1356,12 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	common.GlobalTxHash = common.HexToHash("0x0")
 	common.GlobalBlockNumber = int(block.NumberU64()) + 1
 
+	// print database inspect result (jmlee)
+	fmt.Println("block inserted -> blocknumber:", block.Header().Number.Int64())
+	if block.Header().Number.Int64() % 505 == 0 {
+		rawdb.InspectDatabase(rawdb.GlobalDB, nil, nil)
+	}
+
 	return status, nil
 }
 
@@ -1383,6 +1389,9 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // the index number of the failing block as well an error describing what went
 // wrong. After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
+
+	fmt.Println("InsertChain() executed")
+
 	// Sanity check that we have something meaningful to import
 	if len(chain) == 0 {
 		return 0, nil
@@ -1410,6 +1419,10 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+
+	// print database inspection (jmlee)
+	fmt.Println("block inserted -> blocknumber:", chain[len(chain)-1].Header().Number.Int64())
+
 	return bc.insertChain(chain, true, true)
 }
 
