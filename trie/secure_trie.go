@@ -19,6 +19,7 @@ package trie
 import (
 	"fmt"
 	"sync"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -81,6 +82,11 @@ func (t *SecureTrie) Get(key []byte) []byte {
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
 	return t.trie.TryGet(t.hashKey(key))
+}
+
+// set key as I want to implement Ethane (jmlee)
+func (t *SecureTrie) TryGet_SetKey(key []byte) ([]byte, error) {
+	return t.trie.TryGet(key)
 }
 
 // TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
@@ -231,11 +237,14 @@ func (t *SecureTrie) MyTryUpdate(key, value []byte, txHash common.Hash, addr com
 		writeContractAccountSlotHash(common.GlobalTxHash, slotHash, CAaddress)
 	}
 
+// set key as I want to implement Ethane (jmlee)
+func (t *SecureTrie) TryUpdate_SetKey(key, value []byte) error {
+	hk := key
 	err := t.trie.TryUpdate(hk, value)
 	if err != nil {
 		return err
 	}
-	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+	// t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
 	return nil
 }
 
@@ -363,4 +372,9 @@ func (t *SecureTrie) Trie() *Trie {
 
 func (t *SecureTrie) MyCommit() {
 	t.trie.MyCommit()
+}
+
+// get last key among leaf nodes (i.e., right-most key value) (jmlee)
+func (t *SecureTrie) GetLastKey() (*big.Int) {
+	return t.trie.GetLastKey()
 }

@@ -24,6 +24,7 @@ import (
 	"sort"
 	"time"
 	"strconv"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -63,7 +64,7 @@ func (n *proofList) Delete(key []byte) error {
 // * Contracts
 // * Accounts
 type StateDB struct {
-	db           Database
+	db           Database	 // actually this is leveldb (jmlee)
 	prefetcher   *triePrefetcher
 	originalRoot common.Hash // The pre-state root, before any changes were made
 	trie         Trie
@@ -123,6 +124,10 @@ type StateDB struct {
 	StorageUpdated int
 	AccountDeleted int
 	StorageDeleted int
+	// to implement compact MPT (jmlee)
+	NextKey				int64 // key of the first 'will be inserted' account
+	CheckpointKey		int64 // save initial NextKey value to determine whether move leaf nodes or not
+	AddrToKeyDirty		map[common.Address]common.Hash // dirty cache for common.AddrToKey
 }
 
 // New creates a new state from a given trie.
@@ -131,6 +136,11 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	if err != nil {
 		return nil, err
 	}
+	
+	// set NextKey as lastKey+1 (jmlee)
+	lastKey := tr.GetLastKey()
+	counter := new(big.Int)
+	counter.Add(lastKey, big.NewInt(1))
 	sdb := &StateDB{
 		db:                  db,
 		trie:                tr,
@@ -144,6 +154,9 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		journal:             newJournal(),
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
+		NextKey:		 	 counter.Int64(),
+		CheckpointKey: 		 counter.Int64(),
+		AddrToKeyDirty:	 	 make(map[common.Address]common.Hash),
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -471,10 +484,53 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	}
 	// Encode the account and update the account trie
 	addr := obj.Address()
-	if err := s.trie.TryUpdateAccount(addr[:], &obj.data, obj.txHash); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+
+	data, err := rlp.EncodeToBytes(obj)
+	if err != nil {
+		panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
 	}
 
+	// codes for compact trie (jmlee)
+	// get addrKey of this address 
+	addrKey, doExist := s.AddrToKeyDirty[addr]
+	if !doExist {
+		addrKey = common.AddrToKey[addr]
+	}
+	addrKey_bigint := new(big.Int)
+	addrKey_bigint.SetString(addrKey.Hex()[2:], 16)
+	if addrKey_bigint.Int64() >= s.CheckpointKey {
+		// this address is newly created address OR already moved address. so just update
+		if err = s.trie.TryUpdate_SetKey(addrKey[:], data); err != nil {
+		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+	}
+	} else {
+		// this address is already in the trie, so move the previous leaf node to the right side (delete & insert)
+
+		// delete previous leaf node (comment out this block if you want to leave previous leaf nodes)
+		if err = s.trie.TryUpdate_SetKey(addrKey[:], nil); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		}
+
+		// additional update for new leaf node
+		// if s.snap != nil {
+		// 	delete(s.snapAccounts, obj.addrHash)
+		// }
+
+		// insert new leaf node at right side
+		newAddrHash := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
+		s.AddrToKeyDirty[addr] = newAddrHash
+		if err = s.trie.TryUpdate_SetKey(newAddrHash[:], data); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		}
+		obj.addrHash = newAddrHash
+		s.NextKey += 1
+	}
+
+	// original code
+	// if err = s.trie.TryUpdate(addr[:], data); err != nil {
+	// 	s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+	// }
+	
 	// If state snapshotting is active, cache the data til commit. Note, this
 	// update mechanism is not symmetric to the deletion, because whereas it is
 	// enough to track account updates at commit time, deletions need tracking
@@ -603,9 +659,9 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	// insert to map to make compactTrie (jmlee)
 	_, doExist := common.AddrToKey[addr]
 	if !doExist && addr != common.ZeroAddress {
-		fmt.Println("make new account -> addr:", addr.Hex(), "/ keyHash:", common.HexToHash(strconv.FormatInt(common.AccountCounter, 16)))
-		common.AddrToKey[addr] = common.HexToHash(strconv.FormatInt(common.AccountCounter, 16))
-		common.AccountCounter += 1
+		newAddrKey := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
+		s.AddrToKeyDirty[addr] = newAddrKey
+		s.NextKey += 1
 	}
 	
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
@@ -693,8 +749,14 @@ func (s *StateDB) Copy() *StateDB {
 		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
 		journal:             newJournal(),
 		hasher:              crypto.NewKeccakState(),
+		NextKey:		 	 s.NextKey,
+		CheckpointKey: 		 s.CheckpointKey,
+		AddrToKeyDirty:		 make(map[common.Address]common.Hash, len(s.AddrToKeyDirty)),
 	}
 	// Copy the dirty states, logs, and preimages
+	for key, value := range s.AddrToKeyDirty {
+		state.AddrToKeyDirty[key] = value
+	}
 	for addr := range s.journal.dirties {
 		// As documented [here](https://github.com/ethereum/go-ethereum/pull/16485#issuecomment-380438527),
 		// and in the Finalise-method, there is a case where an object is in the journal but not
@@ -957,6 +1019,13 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			storageCommitted += committed
 		}
 	}
+	// apply dirties to common.AddrToKey (jmlee)
+	common.AddrToKeyMapMutex.Lock()
+	for key, value := range s.AddrToKeyDirty {
+		common.AddrToKey[key] = value
+	}
+	common.AddrToKeyMapMutex.Unlock()
+
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
 	}
