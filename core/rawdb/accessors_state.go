@@ -17,6 +17,8 @@
 package rawdb
 
 import (
+	// "fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -93,11 +95,13 @@ func HasTrieNode(db ethdb.KeyValueReader, hash common.Hash) bool {
 	return ok
 }
 
+// important (jmlee)
 // WriteTrieNode writes the provided trie node database.
 func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
 	if err := db.Put(hash.Bytes(), node); err != nil {
 		log.Crit("Failed to store trie node", "err", err)
 	}
+	// fmt.Println("write trie node -> node hash:", hash.Hex())
 }
 
 // DeleteTrieNode deletes the specified trie node from the database.

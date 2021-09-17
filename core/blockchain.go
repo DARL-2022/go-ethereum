@@ -26,6 +26,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	// "strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -423,6 +424,7 @@ func (bc *BlockChain) empty() bool {
 	return true
 }
 
+// important (jmlee)
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
 func (bc *BlockChain) loadLastState() error {
@@ -764,6 +766,7 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	headBlockGauge.Update(int64(block.NumberU64()))
 }
 
+// important (jmlee)
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
@@ -1213,7 +1216,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// If we're running an archive node, always flush
 	if bc.cacheConfig.TrieDirtyDisabled {
-		return triedb.Commit(root, false, nil)
+		// archive node는 여기에서 매 블록마다 trie nodes를 flush 시키는 거임 (jmlee)
+		// fmt.Println("archive node flush -> trie root:", root.Hex())
+		if err := triedb.Commit(root, false, nil); err != nil {
+			return NonStatTy, err
+		}
 	} else {
 		// Full but not archive node, do proper garbage collection
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
@@ -1368,10 +1375,17 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	common.GlobalBlockNumber = int(block.NumberU64()) + 1
 
 	// print database inspect result (jmlee)
-	if block.Header().Number.Int64()%1 == 0 {
+	fmt.Println("block inserted -> blocknumber:", block.Header().Number.Int64())
+	if block.Header().Number.Int64() % 1 == 0 {
+		// inspect database
 		rawdb.InspectDatabase(rawdb.GlobalDB, nil, nil)
 
 		// print state trie (jmlee)
+		// fmt.Println("$$$ print state trie at block", bc.CurrentBlock().Header().Number)
+		// ldb := trie.NewDatabase(bc.db)
+		// stateTrie, _ := trie.NewSecure(bc.CurrentBlock().Root(), ldb)
+		// stateTrie.Print()
+	}
 
 	// set common.DoDeleteLeafNode (jmlee)
 	if (block.Header().Number.Int64()+1) % common.DeleteLeafNodeEpoch == 0 {
@@ -1379,6 +1393,21 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	} else {
 		common.DoDeleteLeafNode = false
 	}
+
+	// print some of snapshot info for debugging (jmlee)
+	// if bc.snaps != nil {
+	// 	bcsnap := bc.snaps.Snapshot(bc.CurrentBlock().Root())
+	// 	for i := int64(0); i < 15; i++ {
+	// 		key := common.HexToHash(strconv.FormatInt(i, 16))
+	// 		if acc, err := bcsnap.Account(key); err == nil {
+	// 			if acc == nil {
+	// 				fmt.Println("snapshot[",i,"]: nil")
+	// 			} else {
+	// 				fmt.Println("snapshot[",i,"]: exist ->", acc)
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	return status, nil
 }

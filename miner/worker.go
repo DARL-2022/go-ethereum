@@ -23,6 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	// "fmt"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
@@ -592,9 +593,10 @@ func (w *worker) mainLoop() {
 				}
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
-				w.commitTransactions(w.current, txset, nil)
+				// just applay transactions to the pending state when we're not mining (jmlee)
+				w.commitTransactions(txset, coinbase, nil)
 
-				// Only update the snapshot if any new transactions were added
+				// Only update the snapshot if any new transactons were added
 				// to the pending block
 				if tcount != w.current.tcount {
 					w.updateSnapshot(w.current)

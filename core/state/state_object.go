@@ -115,9 +115,9 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 	// set addrHash as a specific key value to implement compactTrie (jmlee)
 	addressHash, doExist := db.AddrToKeyDirty[address]
 	if !doExist {
-	common.AddrToKeyMapMutex.Lock() // to avoid fatal error: "concurrent map read and map write"
+		common.AddrToKeyMapMutex.Lock() // to avoid fatal error: "concurrent map read and map write"
 		addressHash = common.AddrToKey[address]
-	common.AddrToKeyMapMutex.Unlock()
+		common.AddrToKeyMapMutex.Unlock()
 	}
 	
 	return &stateObject{

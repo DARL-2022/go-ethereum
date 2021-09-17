@@ -696,6 +696,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
 func (db *Database) Commit(node common.Hash, report bool, callback func(common.Hash)) error {
+	fmt.Println("triedb.Commit() -> node hash:", node.Hex())
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
@@ -757,6 +758,7 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 
 // commit is the private locked version of Commit.
 func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner, callback func(common.Hash)) error {
+	fmt.Println("triedb.commit() -> node hash:", hash.Hex())
 	// If the node does not exist, it's a previously committed node
 
 	// jhkim: count duplicated flushed node. It should be done before check db.dirties
@@ -799,7 +801,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	// }
 
 	// If we've reached an optimal batch size, commit and start over
-	rawdb.WriteTrieNode(batch, hash, node.rlp())
+	rawdb.WriteTrieNode(batch, hash, node.rlp()) // this might try to write the already written node (ex. same leaf node) (jmlee)
 	if callback != nil {
 		callback(hash)
 	}
