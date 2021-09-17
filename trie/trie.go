@@ -1011,13 +1011,13 @@ func (t *Trie) MyCommit() {
 }
 
 // get last key among leaf nodes (i.e., right-most key value) (jmlee)
-func (t *Trie) GetLastKey() (*big.Int) {
+func (t *Trie) GetLastKey() *big.Int {
 	lastKey := t.getLastKey(t.root, nil)
 	return lastKey
 }
 
 // get last key among leaf nodes (i.e., right-most key value) (jmlee)
-func (t *Trie) getLastKey(origNode node, lastKey []byte) (*big.Int) {
+func (t *Trie) getLastKey(origNode node, lastKey []byte) *big.Int {
 	switch n := (origNode).(type) {
 	case nil:
 		return big.NewInt(0)
@@ -1048,6 +1048,8 @@ func (t *Trie) getLastKey(origNode node, lastKey []byte) (*big.Int) {
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
+}
+
 // Trie size inspection from nakamoto.snu.ac.kr(jhkim)
 
 // trie inspecting results (jhkim)
