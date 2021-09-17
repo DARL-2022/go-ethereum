@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
@@ -377,4 +378,12 @@ func (t *SecureTrie) MyCommit() {
 // get last key among leaf nodes (i.e., right-most key value) (jmlee)
 func (t *SecureTrie) GetLastKey() (*big.Int) {
 	return t.trie.GetLastKey()
+// trie/secure_trie.go
+
+func (t *SecureTrie) InspectTrie() TrieInspectResult {
+	return t.trie.InspectTrie()
+}
+
+func (t *SecureTrie) InspectStorageTrie() TrieInspectResult {
+	return t.trie.InspectStorageTrie()
 }
