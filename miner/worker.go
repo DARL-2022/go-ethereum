@@ -1073,6 +1073,14 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 			return
 		}
 	}
+
+	// delete previous leaf nodes (jmlee)
+	if header.Number.Int64() % common.DeleteLeafNodeEpoch == 0 {
+		keysToDelete := append(common.KeysToDelete, w.current.state.KeysToDeleteDirty...)
+		w.current.state.DeletePreviousLeafNodes(keysToDelete)
+	}
+
+	w.commit(uncles, w.fullTaskHook, true, tstart)
 }
 
 // generateWork generates a sealing block based on the given parameters.
