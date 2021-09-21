@@ -1024,6 +1024,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	// Note genParams.coinbase can be different with header.Coinbase
 	// since clique algorithm can modify the coinbase field in header.
 	env, err := w.makeEnv(parent, header, genParams.coinbase)
+	common.CheckpointKeys[header.Number.Int64()] = w.current.state.NextKey // save this block's initial NextKey
 	if err != nil {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
@@ -1080,6 +1081,15 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 	if header.Number.Int64() % common.DeleteLeafNodeEpoch == 0 {
 		keysToDelete := append(common.KeysToDelete, w.current.state.KeysToDeleteDirty...)
 		w.current.state.DeletePreviousLeafNodes(keysToDelete)
+		// reset common.KeysToDelete
+		common.KeysToDelete = make([]common.Hash, 0)
+	}
+
+	// inactivate inactive accounts (jmlee)
+	if header.Number.Int64() % common.DeleteLeafNodeEpoch == 0 {
+		lastKeyToCheck := common.CheckpointKeys[header.Number.Int64()-common.InactivateCriterion+1]
+		inactivatedAccountsNum := w.current.state.InactivateLeafNodes(common.InactiveBoundaryKey, lastKeyToCheck)
+		common.InactiveBoundaryKey += inactivatedAccountsNum
 	}
 
 	w.commit(uncles, w.fullTaskHook, true, tstart)
