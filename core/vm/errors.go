@@ -40,6 +40,8 @@ var (
 	// errStopToken is an internal token indicating interpreter loop termination,
 	// never returned to outside callers.
 	errStopToken = errors.New("stop token")
+
+	ErrInvalidProof             = errors.New("invalid proof for restoring inactive account") // (joonha)
 )
 
 // ErrStackUnderflow wraps an evm error when the items on the stack less
