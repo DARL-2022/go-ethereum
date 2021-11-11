@@ -44,6 +44,12 @@ const (
 	AddressLength = 20
 )
 
+// // KeyAndMap structure which will be used as a value of AddrToKey mapping (joonha)
+// type HashList struct {
+// 	Key          Hash 		   // location of the Account in a state trie
+// 	Map			 map[int64]Hash // (variable ID / Location) mapping variable ID to Location in a storage trie
+// }
+
 var (
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
@@ -54,7 +60,7 @@ var (
 	AddrToKeyPath = "" // disk path to save AddrToKey (will be set as [datadir]/geth/chaindata/) (const)
 
 	// map storing inactive accounts list (joonha)
-	AddrToKey_inactive = make(map[Address][]Hash)
+	AddrToKey_inactive = make(map[Address]map[int64]Hash)
 
 	KeysToDelete = make([]Hash, 0) // store previous leaf nodes' keys to delete later
 	DeleteLeafNodeEpoch = int64(3) // block epoch to delete previous leaf nodes (& inactivate inactive leaf nodes) (const)
