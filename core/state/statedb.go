@@ -1286,6 +1286,7 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		if err := s.trie.TryUpdate_SetKey(keyToInsert[:], AccountsToInactivate[index]); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", keyToInsert[:], err))
 		} else {
+			fmt.Println("joonha 1")
 			// apply inactivation result to AddrToKey (joonha)
 			// Q. Should this be applied to AddrToKey_Dirty?
 			common.AddrToKey[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
@@ -1296,16 +1297,27 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			lenATKI := len(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
 			latest := 0
 			i := 0
+			fmt.Println("lenATKI: ", lenATKI)
+			fmt.Println("joonha 2")
 			for i <= lenATKI {
-				latest = i - 1
+				fmt.Println("joonha 3")
+				latest = i
 				if int64(i) == common.HashToInt64(common.NoExistKey) {
 					break
 				}
 				i++
 			}
+			
+			fmt.Println("joonha 4")
 
 			// latest := len(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
-			common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])][latest] = keyToInsert
+			if common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] == nil{
+				fmt.Println("joonha 5")
+				common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] = make(map[int64]common.Hash)
+			}
+			common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])][int64(latest)] = keyToInsert
+			fmt.Println("joonha 6")
+
 		}
 	}
 

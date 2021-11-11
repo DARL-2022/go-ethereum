@@ -19,7 +19,7 @@ package vm
 import (
 	// (joonha)
 	"bytes" 
-	"encoding/binary"
+	// "encoding/binary"
 
 	"errors"
 	"math/big"
@@ -39,22 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-
-	// "bytes"
-	// "math/big"
-	// "sync/atomic"
-	// "time"
-	// "fmt"
-
-	// "github.com/ethereum/go-ethereum/common"
-	// "github.com/ethereum/go-ethereum/core/rawdb"
-	// "github.com/ethereum/go-ethereum/core/state"
-	// "github.com/ethereum/go-ethereum/core/types"
-	// "github.com/ethereum/go-ethereum/crypto"
-	// "github.com/ethereum/go-ethereum/log"
-	// "github.com/ethereum/go-ethereum/params"
-	// "github.com/ethereum/go-ethereum/rlp"
-	// "github.com/ethereum/go-ethereum/trie"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -323,7 +307,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// decode rlp encoded data
 		var data []interface{}
 		rlp.Decode(bytes.NewReader(input), &data)
-		// log.Info("### print input decode", "data", data)
+		log.Info("### print input decode", "data", data)
 
 		cnt := 0
 		limit := len(data)
@@ -344,18 +328,22 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		latest := 0
 		i := 0
 		for i <= lenATKI {
-			latest = i - 1
+			latest = i
 			if int64(i) == common.HashToInt64(common.NoExistKey) {
 				break
 			}
 			i++
 		}
 
-		// latest := len(common.AddrToKey_inactive[inactiveAddr]) - 1
-		ik := common.AddrToKey_inactive[inactiveAddr][latest] // lastest
-		common.AddrToKey_inactive[inactiveAddr][latest] = common.NoExistKey // remove the key from AddrToKey_inactive
+		if common.AddrToKey_inactive[inactiveAddr] == nil{
+			common.AddrToKey_inactive[inactiveAddr] = make(map[int64]common.Hash)
+		}
+		ik := common.AddrToKey_inactive[inactiveAddr][int64(latest)] // lastest
+		common.AddrToKey_inactive[inactiveAddr][int64(latest)] = common.NoExistKey // remove the key from AddrToKey_inactive
 		inactiveKey := common.HexToAddress(ik.Hex())
-		log.Info("### restoration target", "address", inactiveKey)
+		log.Info("### restoration target", "address", inactiveAddr)
+		log.Info("### restoration target", "key", inactiveKey)
+
 		cnt++
 
 		// 여기서 blockNum을 그대로 쓰는 것이 아니라 checkpointBlock으로 변환을 해줘야 할 것.
@@ -366,12 +354,25 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		// ...가 아니라 어차피 가장 최신의 inactive trie만 보면 되는 것이다.
 		// 즉 가장 최신의 checkpointBlock를 지정하자.
+
+		// get block number to start restoration
+		startBlockNum := big.NewInt(0)
+		log.Info("### flag 0")
+		startBlockNum.SetBytes(data[cnt].([]byte))
+		log.Info("### block num to begin restoration", "start", startBlockNum.Int64())
+		cnt++
 		
 		blockNum := big.NewInt(0)
-		blockNum.SetBytes(data[1].([]byte))
-		bn:= binary.BigEndian.Uint64(blockNum.Bytes())
-		checkpointBlock := bn - bn % uint64(common.DeleteLeafNodeEpoch)
-		log.Info("\n\n\nCheckpoint Block: ", checkpointBlock, "\n\n\n")
+		log.Info("### flag 1")
+		blockNum.SetBytes(data[1].([]byte)) // ERR
+		log.Info("### flag 2")
+		log.Info("### block num", "blocknum", blockNum.Int64())
+		// bn:= binary.BigEndian.Uint64(blockNum.Bytes())
+		log.Info("### flag 3")
+		// checkpointBlock := bn - (bn % uint64(common.DeleteLeafNodeEpoch))
+		checkpointBlock := blockNum.Uint64() - (blockNum.Uint64() & uint64(common.DeleteLeafNodeEpoch))
+		log.Info("### flag 4")
+		log.Info("### Checkpoint Block", "checkpointBlock", checkpointBlock)
 
 
 		/***************************************/
@@ -384,13 +385,23 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		resAcc.Balance = big.NewInt(0)
 		var accounts []*state.Account
 
+		log.Info("### flag 4-0", "cnt", cnt, "limit", limit)
+
+
+		cnt++
+
+
 		for cnt < limit {
+			log.Info("### flag 4-1: cnt < limit")
+
 
 			/***************************************/
 			// GET MERKLE PROOF
 			/***************************************/
 			// get a merkle proof from tx data
 			merkleProof, blockHeader := parseProof(data, int64(checkpointBlock), &cnt)
+
+			log.Info("### flag 4-2")
 
 
 
@@ -399,31 +410,49 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			/***************************************/
 			// if verification fails, return nil right away
 			// hint: Has and Get function should be declared in statedb.go
+			log.Info("### merkleProof", "merkleProof", merkleProof)
 			acc, merkleErr := trie.VerifyProof(blockHeader.Root, crypto.Keccak256(inactiveKey.Bytes()), &merkleProof)
+			log.Info("### flag 4-3")
+
 			if merkleErr != nil {
+				log.Info("### flag 4-4")
+
 				// bad merkle proof. something is wrong
 				log.Info("Restore Error: bad merkle proof")
 				return nil, gas, ErrInvalidProof
 			}
 
+			log.Info("### flag 4-5")
 
 			/***************************************/
 			// VALID MERKLE PROOF
 			/***************************************/
 			if acc == nil {
+				log.Info("### flag 4-6")
+
 				// there is no account
 				accounts = append(accounts, nil)
 			} else {
+				log.Info("### flag 4-7")
+
 				// there is the account
 				curAcc = &state.Account{}
+				log.Info("### flag 4-8")
+
 				rlp.DecodeBytes(acc, &curAcc)
+				log.Info("### flag 4-9")
+
 				accounts = append(accounts, curAcc)
+				log.Info("### flag 4-10")
+
 			}
 		}
 
 		// Reaching here, it means the proof is valid.
 
 		// get target account at the checkpointBlock
+		log.Info("### flag 4-11")
+
 		blockHash := rawdb.ReadCanonicalHash(rawdb.GlobalDB, checkpointBlock)
 		blockHeader := rawdb.ReadHeader(rawdb.GlobalDB, blockHash, checkpointBlock)
 
@@ -433,10 +462,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// deal with the checkpointBlock's account state
 		isExist := cachedState.Exist(inactiveAddr)
 		if isExist {
+			log.Info("### flag 5")
 			// there is the account
 			curAcc = cachedState.GetAccount(inactiveAddr)
 			accounts = append(accounts, curAcc)
 		} else {
+			log.Info("### flag 6: NO ACCOUNT is found in the trie")
 			// there is no account
 			accounts = append(accounts, nil)
 		}
@@ -459,6 +490,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// RESTORE
 		/***************************************/
 
+		log.Info("### account num", "len(accounts)", len(accounts))
 		if len(accounts) == 0 {
 			// Error: no accounts to restore (no need to restore)
 			log.Info("Restore Error: no accounts to restore")
@@ -467,25 +499,34 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		// CREATE OR MERGE
 		// CREATE (no Active account in active trie)
-		if(common.HashToInt64(common.AddrToKey[inactiveAddr]) > common.InactiveBoundaryKey) {
+		log.Info("### flag 10")
+		if(common.HashToInt64(common.AddrToKey[inactiveAddr]) <= common.InactiveBoundaryKey) {
+			log.Info("### flag 11")
 			evm.StateDB.CreateAccount(inactiveAddr) // create inactive account to state trie
-			resAcc.Balance.Add(resAcc.Balance, accounts[0].Balance)
+			log.Info("### flag 12")
+			resAcc.Balance.Add(resAcc.Balance, accounts[1].Balance)
+			log.Info("### flag 13")
 		} else { // MERGE (Active account in active trie)
+			log.Info("### flag 14")
 			activeBalance := evm.StateDB.GetBalance(inactiveAddr) // Addr의 GetBalance가 맞지만, inactive 것은 제외돼야 함.
-			resAcc.Balance.Add(activeBalance, accounts[0].Balance)
+			log.Info("### flag 15")
+			resAcc.Balance.Add(activeBalance, accounts[1].Balance)
+			log.Info("### flag 16")
 		}
 
 		// log.Info("### Restoration success", "restoredAddr", inactiveAddr)
 		// log.Info("restoredBalance", resAcc.Balance, "blockNumber", evm.BlockNumber) // resAcc should be deleted.
 
 		// 세 번째 인자로 최종 balance를 넘겨야 한다.
+		log.Info("### flag 17")
 		evm.Context.Restore(evm.StateDB, inactiveAddr, resAcc.Balance, evm.Context.BlockNumber) // restore balance
-
+		log.Info("### flag 18")
 		
 
 
 	} else { // no restoration
 		// value transfer tx
+		log.Info("############################## WHAT!!")
 		evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
 	}
 
@@ -537,19 +578,40 @@ func parseProof(data []interface{}, blockNum int64, cnt *int) (state.ProofList, 
 	blockHash := rawdb.ReadCanonicalHash(rawdb.GlobalDB, uint64(blockNum))
 	blockHeader := rawdb.ReadHeader(rawdb.GlobalDB, blockHash, uint64(blockNum))
 
+	log.Info("### flag 101")
+
 	// get Merkle proof
 	merkleProof := make(state.ProofList, 0)
+
+	log.Info("### flag 102")
 	n := big.NewInt(0)
+	log.Info("### flag 103")
 	n.SetBytes(data[*cnt].([]byte))
-	i := big.NewInt(0)
-	for ; i.Cmp(n) == -1; i.Add(i, big.NewInt(1)) {
-		*cnt++
-		pf := data[*cnt].([]byte)
-		// log.Info("### print proofs", "proofs", pf)
-		merkleProof = append(merkleProof, pf)
-	}
+	log.Info("### flag 104")
+	// i := big.NewInt(0)
+	log.Info("### flag 105")
+	// for ; i.Cmp(n) == -1; i.Add(i, big.NewInt(1)) {
+	// 	log.Info("### flag 106")
+	// 	*cnt++
+	// 	log.Info("### flag 106-1")
+	// 	pf := data[*cnt].([]byte)
+	// 	// log.Info("### print proofs", "proofs", pf)
+	// 	merkleProof = append(merkleProof, pf)
+	// 	log.Info("### flag 106-2")
+	// }
+
+	log.Info("### flag 106")
+	// *cnt++
+	log.Info("### flag 106-1")
+	pf := data[*cnt].([]byte)
+	// log.Info("### print proofs", "proofs", pf)
+	merkleProof = append(merkleProof, pf)
+	log.Info("### flag 106-2")
+
+
 	*cnt++ // for iteration
 
+	log.Info("### flag 107")
 	return merkleProof, blockHeader
 }
 
