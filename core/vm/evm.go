@@ -239,6 +239,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
 
+	// (joonha) is commenting out to fix 0123~789 account being added to trie
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
 			// Calling a non existing account, don't do anything, but ping the tracer
@@ -248,7 +249,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			}
 			return nil, gas, nil
 		}
-		evm.StateDB.CreateAccount(addr)
+		// evm.StateDB.CreateAccount(addr)
 	}
 
 	/***************************************/
@@ -328,6 +329,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		latest := 0
 		i := 0
 		for i <= lenATKI {
+			log.Info("AddrToKey_inactive i", "i", i, "Key", common.AddrToKey_inactive[inactiveAddr][int64(i)])
 			latest = i
 			if int64(i) == common.HashToInt64(common.NoExistKey) {
 				break
@@ -338,6 +340,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if common.AddrToKey_inactive[inactiveAddr] == nil{
 			common.AddrToKey_inactive[inactiveAddr] = make(map[int64]common.Hash)
 		}
+		
+		log.Info("### len(AddrToKey_inactive)", "len(AddrToKey_inactive)", len(common.AddrToKey_inactive[inactiveAddr]))
+		log.Info("### latest", "latest", latest)
+
 		ik := common.AddrToKey_inactive[inactiveAddr][int64(latest)] // lastest
 		common.AddrToKey_inactive[inactiveAddr][int64(latest)] = common.NoExistKey // remove the key from AddrToKey_inactive
 		inactiveKey := common.HexToAddress(ik.Hex())
@@ -370,7 +376,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// bn:= binary.BigEndian.Uint64(blockNum.Bytes())
 		log.Info("### flag 3")
 		// checkpointBlock := bn - (bn % uint64(common.DeleteLeafNodeEpoch))
-		checkpointBlock := blockNum.Uint64() - (blockNum.Uint64() & uint64(common.DeleteLeafNodeEpoch))
+		// checkpointBlock := blockNum.Uint64() - (blockNum.Uint64() & uint64(common.DeleteLeafNodeEpoch))
+		checkpointBlock := blockNum.Uint64()
 		log.Info("### flag 4")
 		log.Info("### Checkpoint Block", "checkpointBlock", checkpointBlock)
 
@@ -389,6 +396,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 
 		cnt++
+
+		log.Info("### limit", "limit", limit)
 
 
 		for cnt < limit {
@@ -411,6 +420,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// if verification fails, return nil right away
 			// hint: Has and Get function should be declared in statedb.go
 			log.Info("### merkleProof", "merkleProof", merkleProof)
+			log.Info("inactiveKey", "inactiveKey", crypto.Keccak256(inactiveKey.Bytes()))
 			acc, merkleErr := trie.VerifyProof(blockHeader.Root, crypto.Keccak256(inactiveKey.Bytes()), &merkleProof)
 			log.Info("### flag 4-3")
 
@@ -424,14 +434,15 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 			log.Info("### flag 4-5")
 
-			/***************************************/
-			// VALID MERKLE PROOF
-			/***************************************/
 			if acc == nil {
 				log.Info("### flag 4-6")
 
+				log.Info("Merkle proof is Invalid ?") // Is this right? (joonha)
+
 				// there is no account
 				accounts = append(accounts, nil)
+
+				// return nil, gas, ErrInvalidProof
 			} else {
 				log.Info("### flag 4-7")
 
@@ -459,6 +470,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// hint: Database() should be declared in vm/interface.go
 		cachedState, _ := state.New(blockHeader.Root, evm.StateDB.Database(), nil) // snapshot -> nil
 
+		// Q. 
+		// 왜 1 3 3 3 3 3 3 에서는 inactiveAddr을 찾아내는 반면
+		//    1 3 3 3 3 3 1 에서는 inactiveAddr이 없다고 하지?
+		// Trie Printing에서는 보이는데...?
+		// 또한 3 3 3 3 연속 후 첫 번째 offset 1 transaction의 경우, 누락(?) 된다. -> 아닐 때도 있음.
+
 		// deal with the checkpointBlock's account state
 		isExist := cachedState.Exist(inactiveAddr)
 		if isExist {
@@ -470,6 +487,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			log.Info("### flag 6: NO ACCOUNT is found in the trie")
 			// there is no account
 			accounts = append(accounts, nil)
+
+			log.Info("Restore Error: no accounts to restore")
+			return nil, gas, ErrInvalidProof // TODO: this error msg should be altered. (joonha)
 		}
 
 		// Reaching here, 'accounts' contains a list of accounts to be restored.
@@ -526,7 +546,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	} else { // no restoration
 		// value transfer tx
-		log.Info("############################## WHAT!!")
 		evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
 	}
 

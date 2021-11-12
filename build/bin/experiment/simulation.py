@@ -11,12 +11,12 @@ from datetime import datetime
 from multiprocessing import Pool
 
 # Settings
-FULL_PORT = "8081"
+FULL_PORT = "8082"
 PASSWORD = "1234"
 
 # Account number
 ACCOUNT_NUM = int(sys.argv[1])
-TX_PER_BLOCK = 5
+TX_PER_BLOCK = 3
 
 # multiprocessing
 THREAD_COUNT = 1
