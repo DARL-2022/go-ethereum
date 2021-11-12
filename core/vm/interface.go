@@ -22,6 +22,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	// (joonha)
+	// "github.com/ethereum/go-ethereum/trie"
+
 )
 
 // StateDB is an EVM database for full state querying.
@@ -81,6 +85,11 @@ type StateDB interface {
 
 	// Database returns database in stateDB (jmlee)
 	Database() state.Database
+
+	// (joonha)
+
+	DeletePreviousLeafNodes([]common.Hash)
+	
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM
