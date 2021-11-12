@@ -542,7 +542,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		if err = s.trie.TryUpdate_SetKey(addrKey[:], data); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
-	} else {
+	} else if addrKey_bigint.Int64() >= common.InactiveBoundaryKey { // InactiveBoundaryKey 이후여야 함!!!!!!!!!! (joonha)
 		// this address is already in the trie, so move the previous leaf node to the right side (delete & insert)
 
 		// do not delete this now, just append s.KeysToDeleteDirty to delete them at once later (periodical delete)
@@ -554,6 +554,21 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 			delete(s.snapAccounts, obj.addrHash) // delete this from snapshot's update list
 			s.snapDestructs[obj.addrHash] = struct{}{} // add this to snapshot's delete list
 		}
+
+		// insert new leaf node at right side
+		newAddrHash := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
+		s.AddrToKeyDirty[addr] = newAddrHash
+		// fmt.Println("insert -> key:", newAddrHash.Hex(), "/ addr:", addr.Hex())
+		if err = s.trie.TryUpdate_SetKey(newAddrHash[:], data); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		}
+		// fmt.Println("move leaf node to right -> addr:", addr.Hex(), "/ keyHash:", newAddrHash)
+		obj.addrHash = newAddrHash
+		s.NextKey += 1
+	} else { // (joonha) 
+		// there CAN be an inactive account. If then, act like this account is a new account. 
+		// also Updating AddrToKey is needed.
+		// No deletion is needed.
 
 		// insert new leaf node at right side
 		newAddrHash := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
@@ -677,28 +692,12 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
 		}
 
-		// (joonha)
-		// addr로 TryGet을 하는 것이 맞는지.
-		// 아랫줄의 TryGet에서 addr을 (addrToKey) Key로 변환하여 파라미터로 그 키를 넘겨야 할 것 같다.
-		// 그런데 addr로 그냥 넘겼을 때 오류가 뜨지 않으니... 우선 addr로 넘기는 것이 맞다고 생각해보자.
-
-		enc, err := s.trie.TryGet(addr.Bytes()) // get account from state trie //--> original code
-
-		// (joonha)
-		// key := common.AddrToKey[addr] // AddrToKey vs. AddrToKeyDirty ?
-		// enc, err := s.trie.TryGet(key.Bytes()) // get account from state trie
-		// 계정 대응이 안됨. insufficient funds가 뜸. 
+		enc, err := s.trie.TryGet(addr.Bytes()) // get account from state trie
 
 		if err != nil {
 			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr.Bytes(), err))
 			return nil
 		}
-
-		// (joonha)
-		// enc에는 trie에서 가져온 account object가 저장됨.
-		// object를 어디로부터 가져왔는지를 여기서 확인하고 restoration 관련 코드를 추가하면 될 듯.
-		// Key가 어느 범위에 속하는지를 확인하면 될 듯함.
-
 
 		if len(enc) == 0 {
 			// fmt.Println("  cannot find the address outside of the snapshot")
@@ -1346,13 +1345,14 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			
 			fmt.Println("joonha 4")
 
-			// latest := len(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
 			if common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] == nil{
 				fmt.Println("joonha 5")
 				common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] = make(map[int64]common.Hash)
 			}
 			common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])][int64(latest)] = keyToInsert
-			fmt.Println("joonha 6")
+			fmt.Println("acc: ", common.BytesToAddress(AccountsToInactivate[index]))
+			fmt.Println("latest: ", latest)
+			fmt.Println("keyToInsert: ", keyToInsert)
 
 		}
 	}

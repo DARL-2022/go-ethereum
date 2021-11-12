@@ -248,7 +248,8 @@ func (n *shortNode) toString(ind string, db *Database) string {
 	hashnode, _ := n.cache()
 	hash := common.BytesToHash(hashnode)
 	// return fmt.Sprintf("{shortNode hash: %s, key: %x - value: %v} ", hash.Hex(), n.Key, n.Val.toString(ind+"  ", db))
-	return fmt.Sprintf("\n\t\tshortNode hash: %s, \n\t\tkey:\t\t%x \n\t\t%v ", hash.Hex(), n.Key, n.Val.toString(ind+"  ", db)) // cleaner printing (joonha)
+	// return fmt.Sprintf("\n\t\tshortNode hash: %s, \n\t\tkey:\t\t%x \n\t\t%v ", hash.Hex(), n.Key, n.Val.toString(ind+"  ", db)) // cleaner printing (joonha)
+	return fmt.Sprintf("\n\t\tshortNode hash: %s, \n\t\tkey:\t\t%x \n\t\t%v \nInactiveBoundaryKey is %d ", hash.Hex(), n.Key, n.Val.toString(ind+"  ", db), common.InactiveBoundaryKey) // cleaner printing (joonha)
 }
 func (n hashNode) toString(ind string, db *Database) string {
 	// resolve hashNode (get node from db)
@@ -273,5 +274,13 @@ func (n valueNode) toString(ind string, db *Database) string {
 	var acc Account
 	rlp.DecodeBytes([]byte(n), &acc)
 	// return fmt.Sprintf("[ Nonce: %d / Balance: %s ]", acc.Nonce, acc.Balance.String())
-	return fmt.Sprintf("Nonce:\t\t%d\n\t\tBalance:\t%s\n\t\tstorageRoot:\t%s\n\t\tcodeHash:\t%x\n\t\taddr:\t\t%s\n", acc.Nonce, acc.Balance.String(), acc.Root, acc.CodeHash, acc.Addr) // print (joonha)
+	return fmt.Sprintf("Nonce:\t\t%d\n\t\tBalance:\t%s\n\t\tstorageRoot:\t%s\n\t\tcodeHash:\t%x\n\t\taddr:\t\t%s\n\t\tkey:\t\t%s\n", acc.Nonce, acc.Balance.String(), acc.Root, acc.CodeHash, acc.Addr, common.AddrToKey[acc.Addr]) // print (joonha)
+
+	// inactive account여도 AddrToKey_inactive 가 아니라 AddrToKey 가 출력되고 있으니 주의! 
+
+	// if common.HashToInt64(common.AddrToKey[acc.Addr]) > common.InactiveBoundaryKey {
+	// 	return fmt.Sprintf("Nonce:\t\t%d\n\t\tBalance:\t%s\n\t\tstorageRoot:\t%s\n\t\tcodeHash:\t%x\n\t\taddr:\t\t%s\n\t\tkey:\t\t%s\n", acc.Nonce, acc.Balance.String(), acc.Root, acc.CodeHash, acc.Addr, common.AddrToKey[acc.Addr]) // print (joonha)
+	// } else {
+	// 	return fmt.Sprintf("Nonce:\t\t%d\n\t\tBalance:\t%s\n\t\tstorageRoot:\t%s\n\t\tcodeHash:\t%x\n\t\taddr:\t\t%s\n\t\tkey:\t\t%s\n", acc.Nonce, acc.Balance.String(), acc.Root, acc.CodeHash, acc.Addr, common.AddrToKey_inactive[acc.Addr]) // print (joonha)
+	// }
 }
