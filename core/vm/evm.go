@@ -226,6 +226,7 @@ func (evm *EVM) Interpreter() Interpreter {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	log.Info("CALLL IS CALLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLED")
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -326,28 +327,42 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// get latest key from addrToKey_inactive 
 
 		// len이 아니라 NoExistKey가 나오기 전까지 iterate 해야 할 듯.
-		lenATKI := len(common.AddrToKey_inactive[inactiveAddr])
-		latest := 0
-		i := 0
-		for i <= lenATKI {
-			log.Info("AddrToKey_inactive i", "i", i, "Key", common.AddrToKey_inactive[inactiveAddr][int64(i)])
-			latest = i
-			if int64(i) == common.HashToInt64(common.NoExistKey) {
-				break
-			}
-			i++
-		}
+		// lenATKI := len(common.AddrToKey_inactive[inactiveAddr])
+		// latest := 0
+		// i := 0
+		// for i <= lenATKI {
+		// 	log.Info("AddrToKey_inactive i", "i", i, "Key", common.AddrToKey_inactive[inactiveAddr][int64(i)])
+		// 	latest = i
+		// 	if int64(i) == common.HashToInt64(common.NoExistKey) {
+		// 		break
+		// 	}
+		// 	i++
+		// }
 
 		if common.AddrToKey_inactive[inactiveAddr] == nil{
-			common.AddrToKey_inactive[inactiveAddr] = make(map[int64]common.Hash)
+			log.Info("### flag 0")
+			// common.AddrToKey_inactive[inactiveAddr] = make([]common.Hash)
 		}
 		
-		log.Info("### len(AddrToKey_inactive)", "len(AddrToKey_inactive)", len(common.AddrToKey_inactive[inactiveAddr]))
-		log.Info("### latest", "latest", latest)
+		log.Info("### restoration target", "address", inactiveAddr)
 
-		ik := common.AddrToKey_inactive[inactiveAddr][int64(latest)] // lastest
-		common.AddrToKey_inactive[inactiveAddr][int64(latest)] = common.NoExistKey // remove the key from AddrToKey_inactive
-		inactiveKey := common.HexToAddress(ik.Hex())
+		log.Info("### len(AddrToKey_inactive)", "len(AddrToKey_inactive)", len(common.AddrToKey_inactive[inactiveAddr]))
+		// log.Info("### latest", "latest", latest)
+
+		log.Info("### AddrToKey_inactive[inactiveAddr]: ", common.AddrToKey_inactive[inactiveAddr])
+		lastIndex := len(common.AddrToKey_inactive[inactiveAddr]) - 1
+		/////////////////
+		// 왜 두 번 시행되는가??????????
+		/////////////////		
+
+		// for debuggin
+		// if lastIndex == -1 {
+		// 	log.Info("### DEADDEADDEAD")
+		// 	return nil, gas, ErrInvalidProof
+		// }
+
+		inactiveKey := common.AddrToKey_inactive[inactiveAddr][lastIndex]
+
 		log.Info("### restoration target", "address", inactiveAddr)
 		log.Info("### restoration target", "key", inactiveKey)
 
@@ -364,7 +379,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		// get block number to start restoration
 		startBlockNum := big.NewInt(0)
-		log.Info("### flag 0")
+		log.Info("### flag 0-1")
 		startBlockNum.SetBytes(data[cnt].([]byte))
 		log.Info("### block num to begin restoration", "start", startBlockNum.Int64())
 		cnt++
@@ -393,15 +408,16 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		resAcc.Balance = big.NewInt(0)
 		var accounts []*state.Account
 
-		log.Info("### flag 4-0", "cnt", cnt, "limit", limit)
 
 
 		cnt++
 
-		log.Info("### limit", "limit", limit)
+		// log.Info("### limit", "limit", limit)
 
+		log.Info("### flag 4-0", "cnt", cnt, "limit", limit)
 
 		for cnt < limit {
+			log.Info("### flag 4-0", "cnt", cnt, "limit", limit)
 			log.Info("### flag 4-1: cnt < limit")
 
 
@@ -409,7 +425,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// GET MERKLE PROOF
 			/***************************************/
 			// get a merkle proof from tx data
-			merkleProof, blockHeader := parseProof(data, int64(checkpointBlock), &cnt)
+			merkleProof, blockHeader := parseProof(data, int64(checkpointBlock), &cnt, limit)
 
 			log.Info("### flag 4-2")
 
@@ -422,7 +438,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// hint: Has and Get function should be declared in statedb.go
 			log.Info("### merkleProof", "merkleProof", merkleProof)
 			log.Info("inactiveKey", "inactiveKey", crypto.Keccak256(inactiveKey.Bytes()))
-			acc, merkleErr := trie.VerifyProof(blockHeader.Root, crypto.Keccak256(inactiveKey.Bytes()), &merkleProof)
+			acc, merkleErr := trie.VerifyProof(blockHeader.Root, crypto.Keccak256(inactiveAddr.Bytes()), &merkleProof)
 			log.Info("### flag 4-3")
 
 			if merkleErr != nil {
@@ -438,7 +454,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			if acc == nil {
 				log.Info("### flag 4-6")
 
-				log.Info("Merkle proof is Invalid ?") // Is this right? (joonha)
+				log.Info("Merkle proof is Invalid ????") // Is this right? (joonha)
 
 				// there is no account
 				accounts = append(accounts, nil)
@@ -525,13 +541,13 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			log.Info("### flag 11")
 			evm.StateDB.CreateAccount(inactiveAddr) // create inactive account to state trie
 			log.Info("### flag 12")
-			resAcc.Balance.Add(resAcc.Balance, accounts[1].Balance)
+			resAcc.Balance.Add(resAcc.Balance, accounts[1].Balance) // limit - ?
 			log.Info("### flag 13")
 		} else { // MERGE (Active account in active trie)
 			log.Info("### flag 14")
 			activeBalance := evm.StateDB.GetBalance(inactiveAddr) // Addr의 GetBalance가 맞지만, inactive 것은 제외돼야 함.
 			log.Info("### flag 15")
-			resAcc.Balance.Add(activeBalance, accounts[1].Balance)
+			resAcc.Balance.Add(activeBalance, accounts[1].Balance) // limit - ?
 			log.Info("### flag 16")
 		}
 
@@ -544,9 +560,36 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		log.Info("### flag 18")
 		
 
-		// Remove inactive account from inactive Trie!
-		// AddrToKey_inactive update is already done upper in the code.
+		/***************************************/
+		// REMOVE FROM INACTIVE TRIE
+		/***************************************/
 
+		// 여기서 삭제를 하면 두 번째 호출 시에 에러가 발생한다.
+		// 그래서 우선 comment-out 했다.
+
+		if common.Flag == 1 {
+			// 리스트에서 삭제
+			if len(common.AddrToKey_inactive[inactiveAddr]) > 0 {
+				common.AddrToKey_inactive[inactiveAddr] = common.AddrToKey_inactive[inactiveAddr][:len(common.AddrToKey_inactive[inactiveAddr])-1]
+			}
+			// 만약 그 리스트가 empty면 key 값을 지움.
+			// _, ok := common.AddrToKey_inactive[inactiveAddr];
+			// if !ok { // empty map
+			// 	delete(common.AddrToKey_inactive, inactiveAddr);
+			// }
+		} else {
+			common.Flag = 1
+		}
+		// 리스트에서 삭제
+		// if len(common.AddrToKey_inactive[inactiveAddr]) > 0 {
+		// 	common.AddrToKey_inactive[inactiveAddr] = common.AddrToKey_inactive[inactiveAddr][:len(common.AddrToKey_inactive[inactiveAddr])-1]
+		// }
+		// 만약 그 리스트가 empty면 key 값을 지움.
+		// _, ok := common.AddrToKey_inactive[inactiveAddr];
+		// if !ok { // empty map
+		// 	delete(common.AddrToKey_inactive, inactiveAddr);
+		// }
+		// Remove inactive account from inactive Trie!		
 		keysToDelete := append(common.KeysToDelete, common.BytesToHash(inactiveKey[:]))
 		evm.StateDB.DeletePreviousLeafNodes(keysToDelete)
 		common.KeysToDelete = make([]common.Hash, 0)
@@ -584,7 +627,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
-	// when we're in homestead this also counts for code storage gas errors.
+	// when we're in homestead this also counts for code storage gas errors.	
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
@@ -598,7 +641,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 }
 
 // parseProof get a merkle proof from tx data (joonha)
-func parseProof(data []interface{}, blockNum int64, cnt *int) (state.ProofList, *types.Header) {
+func parseProof(data []interface{}, blockNum int64, cnt *int, limit int) (state.ProofList, *types.Header) {
 
 	// Get block header
 	blockHash := rawdb.ReadCanonicalHash(rawdb.GlobalDB, uint64(blockNum))
@@ -614,28 +657,31 @@ func parseProof(data []interface{}, blockNum int64, cnt *int) (state.ProofList, 
 	log.Info("### flag 103")
 	n.SetBytes(data[*cnt].([]byte))
 	log.Info("### flag 104")
+
+	// log.Info("### flag 106")
+	// // *cnt++
+	// log.Info("### flag 106-1")
+	// pf := data[*cnt].([]byte)
+	// // log.Info("### print proofs", "proofs", pf)
+	// merkleProof = append(merkleProof, pf)
+	// log.Info("### flag 106-2")
+
+
+	// *cnt++ // for iteration
+
+
 	// i := big.NewInt(0)
-	log.Info("### flag 105")
 	// for ; i.Cmp(n) == -1; i.Add(i, big.NewInt(1)) {
-	// 	log.Info("### flag 106")
-	// 	*cnt++
-	// 	log.Info("### flag 106-1")
-	// 	pf := data[*cnt].([]byte)
-	// 	// log.Info("### print proofs", "proofs", pf)
-	// 	merkleProof = append(merkleProof, pf)
-	// 	log.Info("### flag 106-2")
-	// }
+	for *cnt < limit {
+		log.Info("### flag 105")
+		// *cnt++
+		pf := data[*cnt].([]byte)
+		// log.Info("### print proofs", "proofs", pf)
+		merkleProof = append(merkleProof, pf)
+		*cnt++
+	}
+	*cnt++
 
-	log.Info("### flag 106")
-	// *cnt++
-	log.Info("### flag 106-1")
-	pf := data[*cnt].([]byte)
-	// log.Info("### print proofs", "proofs", pf)
-	merkleProof = append(merkleProof, pf)
-	log.Info("### flag 106-2")
-
-
-	*cnt++ // for iteration
 
 	log.Info("### flag 107")
 	return merkleProof, blockHeader

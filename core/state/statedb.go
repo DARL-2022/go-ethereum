@@ -343,7 +343,18 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 
 // GetProof returns the Merkle proof for a given account.
 func (s *StateDB) GetProof(addr common.Address) ([][]byte, error) {
-	return s.GetProofByHash(crypto.Keccak256Hash(addr.Bytes()))
+	lastIndex := len(common.AddrToKey_inactive[addr]) - 1
+	fmt.Println("lastIndex is ", lastIndex)
+
+	fmt.Println("addrToKey_inactive is ", common.AddrToKey_inactive[addr])
+
+	_, ok := common.AddrToKey_inactive[addr];
+	if !ok { // empty map
+		fmt.Println("jooooooooooooooooooooooooooooonha")
+	}
+
+	key := common.AddrToKey_inactive[addr][lastIndex]
+	return s.GetProofByHash(key)
 }
 
 // GetProofByHash returns the Merkle proof for a given account.
@@ -1293,30 +1304,34 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			// save the inactive account key info for later restoration (joonha)
 
 			// len이 아니라 NoExistKey가 나오기 전까지 iterate 해야 할 듯.
-			lenATKI := len(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
-			latest := 0
-			i := 0
-			fmt.Println("lenATKI: ", lenATKI)
-			fmt.Println("joonha 2")
-			for i <= lenATKI {
-				fmt.Println("joonha 3")
-				latest = i
-				if int64(i) == common.HashToInt64(common.NoExistKey) {
-					break
-				}
-				i++
-			}
+			// lenATKI := len(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
+			// latest := 0
+			// i := 0
+			// fmt.Println("lenATKI: ", lenATKI)
+			// fmt.Println("joonha 2")
+			// for i <= lenATKI {
+			// 	fmt.Println("joonha 3")
+			// 	latest = i
+			// 	if int64(i) == common.HashToInt64(common.NoExistKey) {
+			// 		break
+			// 	}
+			// 	i++
+			// }
 			
 			fmt.Println("joonha 4")
 
-			if common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] == nil{
-				fmt.Println("joonha 5")
-				common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] = make(map[int64]common.Hash)
-			}
-			common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])][int64(latest)] = keyToInsert
+			// if common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] == nil{
+			// 	fmt.Println("joonha 5")
+			// 	common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] = make([]common.Hash, 1)
+			// }
+
+			// append를 사용하면 메모리 참조 문제 해결될 것.
+			// common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] = make([]common.Hash, 1)
+			common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] = append(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])], keyToInsert)
+			fmt.Println("addrToKey_inactive is ", common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
 			fmt.Println("acc: ", common.BytesToAddress(AccountsToInactivate[index]))
-			fmt.Println("latest: ", latest)
-			fmt.Println("keyToInsert: ", keyToInsert)
+			// fmt.Println("latest: ", latest)
+			// fmt.Println("keyToInsert: ", keyToInsert)
 
 		}
 	}
