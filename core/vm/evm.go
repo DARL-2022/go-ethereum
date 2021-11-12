@@ -20,6 +20,7 @@ import (
 	// (joonha)
 	"bytes" 
 	// "encoding/binary"
+	// "fmt"
 
 	"errors"
 	"math/big"
@@ -543,6 +544,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		log.Info("### flag 18")
 		
 
+		// Remove inactive account from inactive Trie!
+		// AddrToKey_inactive update is already done upper in the code.
+
+		keysToDelete := append(common.KeysToDelete, common.BytesToHash(inactiveKey[:]))
+		evm.StateDB.DeletePreviousLeafNodes(keysToDelete)
+		common.KeysToDelete = make([]common.Hash, 0)
 
 	} else { // no restoration
 		// value transfer tx
