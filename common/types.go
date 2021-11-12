@@ -51,6 +51,8 @@ const (
 // }
 
 var (
+	Flag = int64(0) // (joonha) debugging
+
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
 
@@ -60,7 +62,8 @@ var (
 	AddrToKeyPath = "" // disk path to save AddrToKey (will be set as [datadir]/geth/chaindata/) (const)
 
 	// map storing inactive accounts list (joonha)
-	AddrToKey_inactive = make(map[Address]map[int64]Hash)
+	// AddrToKey_inactive = make(map[Address]map[int64]Hash)
+	AddrToKey_inactive = make(map[Address][]Hash) ///////////////////////
 
 	KeysToDelete = make([]Hash, 0) // store previous leaf nodes' keys to delete later
 	DeleteLeafNodeEpoch = int64(3) // block epoch to delete previous leaf nodes (& inactivate inactive leaf nodes) (const)
