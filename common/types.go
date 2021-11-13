@@ -52,6 +52,7 @@ const (
 
 var (
 	Flag = int64(0) // (joonha) debugging
+	Restoring = int64(0) // (joonha)
 
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
