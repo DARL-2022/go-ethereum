@@ -273,7 +273,9 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if metrics.EnabledExpensive {
 			meter = &s.db.StorageReads
 		}
-		if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
+		if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil { // -> original code
+		// addrKey := common.AddrToKey[key]
+		// if enc, err = s.getTrie(db).TryGet_SetKey(addrKey[:]); err != nil { // (joonha)
 			s.setError(err)
 			return common.Hash{}
 		}

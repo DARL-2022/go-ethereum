@@ -187,6 +187,13 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	
+	// (joonha)
+	// if common.Flag == 0 {
+	// 	common.Flag = 1
+	// 	return nil, gas, ErrInvalidProof
+	// }
+	
 	log.Info("CALLL IS CALLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLED")
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
@@ -230,6 +237,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// else 문에 넣어야 한다.
 
 	if addr == common.HexToAddress("0x0123456789012345678901234567890123456789") { // restoration
+
+		common.Restoring = 1 // restoration starts
+
 		log.Info("\n")
 
 		/***************************************/
@@ -317,15 +327,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		log.Info("### AddrToKey_inactive[inactiveAddr]: ", common.AddrToKey_inactive[inactiveAddr])
 		lastIndex := len(common.AddrToKey_inactive[inactiveAddr]) - 1
-		/////////////////
-		// 왜 두 번 시행되는가??????????
-		/////////////////		
 
-		// for debuggin
-		// if lastIndex == -1 {
-		// 	log.Info("### DEADDEADDEAD")
-		// 	return nil, gas, ErrInvalidProof
-		// }
+		ii := 0
+		for ii <= lastIndex {
+			log.Info("### addrtoKey_inactive", "ii", ii, ".", common.AddrToKey_inactive[inactiveAddr][ii])
+			ii++
+		}
 
 		inactiveKey := common.AddrToKey_inactive[inactiveAddr][lastIndex]
 
@@ -449,9 +456,19 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		blockHash := rawdb.ReadCanonicalHash(rawdb.GlobalDB, checkpointBlock)
 		blockHeader := rawdb.ReadHeader(rawdb.GlobalDB, blockHash, checkpointBlock)
+		
+		log.Info("### blockHash", "blockHash", blockHash)
+		log.Info("### blockHeader", "blockHeader", blockHeader)
 
 		// hint: Database() should be declared in vm/interface.go
 		cachedState, _ := state.New(blockHeader.Root, evm.StateDB.Database(), nil) // snapshot -> nil
+
+		// (joonha)
+		// blockHash and blockHeader are same in both restoration. (no problem)
+		// but cachedState is slightly different between both restoration
+		// Have to check wheter this occurs the problem
+
+		log.Info("### cachedState", "cachedState", cachedState)
 
 		// Q. 
 		// 왜 1 3 3 3 3 3 3 에서는 inactiveAddr을 찾아내는 반면
@@ -460,11 +477,14 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// 또한 3 3 3 3 연속 후 첫 번째 offset 1 transaction의 경우, 누락(?) 된다. -> 아닐 때도 있음.
 
 		// deal with the checkpointBlock's account state
-		isExist := cachedState.Exist(inactiveAddr)
+		log.Info("### account num", "len(accounts)", len(accounts))
+		isExist := cachedState.Exist(inactiveAddr) // --> original eth4nos
+		// isExist := cachedState.Exist(common.BytesToAddress(inactiveKey[:])) // passing Key not Addr (joonha)
 		if isExist {
 			log.Info("### flag 5")
 			// there is the account
 			curAcc = cachedState.GetAccount(inactiveAddr)
+			log.Info("### curACC", "curACC", curAcc)
 			accounts = append(accounts, curAcc)
 		} else {
 			log.Info("### flag 6: NO ACCOUNT is found in the trie")
@@ -505,7 +525,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		log.Info("### flag 10")
 		if(common.HashToInt64(common.AddrToKey[inactiveAddr]) <= common.InactiveBoundaryKey) {
 			log.Info("### flag 11")
+			common.Restoring = 0
 			evm.StateDB.CreateAccount(inactiveAddr) // create inactive account to state trie
+			common.Restoring = 1
 			log.Info("### flag 12")
 			resAcc.Balance.Add(resAcc.Balance, accounts[1].Balance) // limit - ?
 			log.Info("### flag 13")
@@ -533,8 +555,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// 여기서 삭제를 하면 두 번째 호출 시에 에러가 발생한다.
 		// 그래서 우선 comment-out 했다.
 
+		// common.Flag 0: 첫째 시행, 1: 둘째 시행
 		if common.Flag == 1 {
-			// 리스트에서 삭제
+			// 리스트에서 삭제 (removing last elem from the slice)
 			if len(common.AddrToKey_inactive[inactiveAddr]) > 0 {
 				common.AddrToKey_inactive[inactiveAddr] = common.AddrToKey_inactive[inactiveAddr][:len(common.AddrToKey_inactive[inactiveAddr])-1]
 			}
@@ -543,9 +566,13 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// if !ok { // empty map
 			// 	delete(common.AddrToKey_inactive, inactiveAddr);
 			// }
+			log.Info("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 1")
+			common.Flag = 0
 		} else {
+			log.Info("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 0")
 			common.Flag = 1
 		}
+		
 		// 리스트에서 삭제
 		// if len(common.AddrToKey_inactive[inactiveAddr]) > 0 {
 		// 	common.AddrToKey_inactive[inactiveAddr] = common.AddrToKey_inactive[inactiveAddr][:len(common.AddrToKey_inactive[inactiveAddr])-1]
@@ -555,10 +582,13 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// if !ok { // empty map
 		// 	delete(common.AddrToKey_inactive, inactiveAddr);
 		// }
-		// Remove inactive account from inactive Trie!		
+		// Remove inactive account from inactive Trie!	
+		common.KeysToDelete = make([]common.Hash, 0) // init // added when debugging
 		keysToDelete := append(common.KeysToDelete, common.BytesToHash(inactiveKey[:]))
 		evm.StateDB.DeletePreviousLeafNodes(keysToDelete)
-		common.KeysToDelete = make([]common.Hash, 0)
+		common.KeysToDelete = make([]common.Hash, 0) // init
+
+		common.Restoring = 0 // restoration ends
 
 	} else { // no restoration
 		// value transfer tx

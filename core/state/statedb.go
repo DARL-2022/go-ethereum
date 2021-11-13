@@ -345,6 +345,8 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 
 // GetProof returns the Merkle proof for a given account.
 func (s *StateDB) GetProof(addr common.Address) ([][]byte, error) {
+
+	// (joonha)
 	lastIndex := len(common.AddrToKey_inactive[addr]) - 1
 	fmt.Println("lastIndex is ", lastIndex)
 
@@ -703,7 +705,42 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
 		}
 
-		enc, err := s.trie.TryGet(addr.Bytes()) // get account from state trie
+		// (joonha)
+		// 여기서 TryGet에 addr을 넘겨주면 되는 것인가?
+		//
+		
+		// restore하는 경우와 다른 경우들을 구분을 좀 해야 할 듯함. (joonha)
+		// 혹은 애초에 evm.go에서 Exist 검사를 inactiveAddr 이 아닌 inactiveKey로 하면 되지 않는가?!!
+		
+		// key := common.NoExistKey // (temp) should be altered (joonha)
+
+		// if common.Restoring == 1 { // during restoration
+		// 	fmt.Println("RESTORINGGGGGGGGGGGGGGGGGGGGGGGGGG")
+		// 	lastIndex := len(common.AddrToKey_inactive[addr]) - 1
+		// 	if lastIndex < 0 { // error handling
+		// 		return nil
+		// 	}
+		// 	key = common.AddrToKey_inactive[addr][lastIndex]
+
+		// } else { // not a restoration case
+		// 	fmt.Println("NOOO RESTORINGGGGG")
+		// 	// key_, doExist := s.AddrToKeyDirty[addr]
+		// 	// if !doExist {
+		// 	// 	key_ = common.AddrToKey[addr]
+		// 	// 	key = key_
+		// 	// } else {
+		// 	// 	return nil // error handling
+		// 	// }
+		// 	key = common.BytesToHash(addr.Bytes())
+		// }
+		// enc, err := s.trie.TryGet(key[:])
+
+		// (joonha)
+		// key := s.AddrToKeyDirty[addr] // ? why error ? 
+		key := common.AddrToKey[addr]
+		enc, err := s.trie.TryGet_SetKey(key[:]) // (joonha)
+
+		// enc, err := s.trie.TryGet(addr.Bytes()) // get account from state trie // --> original code
 
 		if err != nil {
 			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr.Bytes(), err))
@@ -711,8 +748,10 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		}
 
 		if len(enc) == 0 {
-			// fmt.Println("  cannot find the address outside of the snapshot")
-			
+			fmt.Println("  cannot find the address outside of the snapshot")
+
+			// double restoration 할 때에 이 경우인 듯함.
+
 			// (joonha)
 			// object를 트리에서 찾지 못한 경우임.
 
@@ -760,6 +799,9 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 		s.AddrToKeyDirty[addr] = newAddrKey
 		s.NextKey += 1
 	}
+
+	// 여기서 쓰이는 getDeletedStateObject도 addr을 넘겼었는데 문제가 없었나? (joonha)
+	// 이게 맞는 건지?
 	
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 
@@ -1307,7 +1349,15 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 	for i := inactiveBoundaryKey; i < lastKeyToCheck; i++ {
 		// check there is leaf node with this key
 		hash := common.Int64ToHash(i)
-		leafNode, err := normTrie.TryGet(hash[:])
+
+		// original code by jmlee
+		leafNode, err := normTrie.TryGet(hash[:]) // TryGet에 Key를 넘겨주는군! 그럼 getDeletedObject에서도 Key를 넘겨줘야 할 듯. (joonha)
+
+		// leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
+
+		// TryGet에 Key가 아닌 addr을 넘겨야 하는데 여기서 잘못하고 있는 것은 아닐까? (joonha)
+		// 의도: 특정 key 위치에 account가 존재하는지를 확인하고자 함.
+		// 근데 왜 문제가 없었지...?
 
 		// find inactive leaf node, append the key to the list
 		if leafNode != nil && err == nil {

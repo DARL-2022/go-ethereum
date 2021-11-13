@@ -16,7 +16,7 @@ PASSWORD = "1234"
 
 # Account number
 ACCOUNT_NUM = int(sys.argv[1])
-TX_PER_BLOCK = 3
+TX_PER_BLOCK = 5
 
 # multiprocessing
 THREAD_COUNT = 1
@@ -49,7 +49,7 @@ def main():
 
     # main loop for send txs
     print("start sending transactions")
-    offset = 3
+    offset = 4
     txNums = [int(TX_PER_BLOCK/THREAD_COUNT)]*THREAD_COUNT
     txNums[0] += TX_PER_BLOCK%THREAD_COUNT
     for i in range(int(ACCOUNT_NUM / TX_PER_BLOCK)):
