@@ -348,8 +348,8 @@ func (s *StateDB) GetProof(addr common.Address) ([][]byte, error) {
 
 	// (joonha)
 	lastIndex := len(common.AddrToKey_inactive[addr]) - 1
+	
 	fmt.Println("lastIndex is ", lastIndex)
-
 	fmt.Println("addrToKey_inactive is ", common.AddrToKey_inactive[addr])
 
 	_, ok := common.AddrToKey_inactive[addr];
@@ -706,40 +706,28 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		}
 
 		// (joonha)
-		// 여기서 TryGet에 addr을 넘겨주면 되는 것인가?
-		//
-		
+		// 여기서 TryGet에 addr을 넘겨주면 되는 것인가
 		// restore하는 경우와 다른 경우들을 구분을 좀 해야 할 듯함. (joonha)
 		// 혹은 애초에 evm.go에서 Exist 검사를 inactiveAddr 이 아닌 inactiveKey로 하면 되지 않는가?!!
-		
-		// key := common.NoExistKey // (temp) should be altered (joonha)
 
-		// if common.Restoring == 1 { // during restoration
-		// 	fmt.Println("RESTORINGGGGGGGGGGGGGGGGGGGGGGGGGG")
-		// 	lastIndex := len(common.AddrToKey_inactive[addr]) - 1
-		// 	if lastIndex < 0 { // error handling
-		// 		return nil
-		// 	}
-		// 	key = common.AddrToKey_inactive[addr][lastIndex]
-
-		// } else { // not a restoration case
-		// 	fmt.Println("NOOO RESTORINGGGGG")
-		// 	// key_, doExist := s.AddrToKeyDirty[addr]
-		// 	// if !doExist {
-		// 	// 	key_ = common.AddrToKey[addr]
-		// 	// 	key = key_
-		// 	// } else {
-		// 	// 	return nil // error handling
-		// 	// }
-		// 	key = common.BytesToHash(addr.Bytes())
-		// }
-		// enc, err := s.trie.TryGet(key[:])
-
-		// (joonha)
-		// key := s.AddrToKeyDirty[addr] // ? why error ? 
+		// key := s.AddrToKeyDirty[addr] // ERROR
 		key := common.AddrToKey[addr]
-		enc, err := s.trie.TryGet_SetKey(key[:]) // (joonha)
 
+		// Double Restoration Problem - Debugging 
+		// 지금 문제는 두 inactive account에 대해서 같은 addr로 retrieve를 하려니까
+		// 당연히 그에 대응하는 account가 없다고 뜨는 것임.
+		// 그러므로 만약 restor 중이라면 AddrToKey가 아닌 AddrToKey_inactive로부터 key를 받아내면 될 듯.
+		if common.Restoring == 1 { // during Restoration
+			lastIndex := len(common.AddrToKey_inactive[addr]) - 1
+			if lastIndex < 0 { // error handling
+				return nil
+			}
+			key = common.AddrToKey_inactive[addr][lastIndex]
+		}
+
+		enc, err := s.trie.TryGet_SetKey(key[:]) // 키로 account를 받아옴.
+
+		// 기존에는 아래처럼 addr로부터 accoun 를 받아오고 있었는데, 이는 도중에 해싱을 하는 함수였음.
 		// enc, err := s.trie.TryGet(addr.Bytes()) // get account from state trie // --> original code
 
 		if err != nil {
@@ -749,12 +737,6 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 
 		if len(enc) == 0 {
 			fmt.Println("  cannot find the address outside of the snapshot")
-
-			// double restoration 할 때에 이 경우인 듯함.
-
-			// (joonha)
-			// object를 트리에서 찾지 못한 경우임.
-
 			return nil
 		}
 		data = new(types.StateAccount)
@@ -801,7 +783,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	}
 
 	// 여기서 쓰이는 getDeletedStateObject도 addr을 넘겼었는데 문제가 없었나? (joonha)
-	// 이게 맞는 건지?
+	// addr을 넘기는 것이 맞음.
 	
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 
@@ -1351,13 +1333,11 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		hash := common.Int64ToHash(i)
 
 		// original code by jmlee
-		leafNode, err := normTrie.TryGet(hash[:]) // TryGet에 Key를 넘겨주는군! 그럼 getDeletedObject에서도 Key를 넘겨줘야 할 듯. (joonha)
+		leafNode, err := normTrie.TryGet(hash[:])
 
+		// 위 코드에서 TryGet_SetKey가 아닌 TryGet을 사용하고 있다. 
+		// 문제가 없는지 주시할 것.
 		// leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
-
-		// TryGet에 Key가 아닌 addr을 넘겨야 하는데 여기서 잘못하고 있는 것은 아닐까? (joonha)
-		// 의도: 특정 key 위치에 account가 존재하는지를 확인하고자 함.
-		// 근데 왜 문제가 없었지...?
 
 		// find inactive leaf node, append the key to the list
 		if leafNode != nil && err == nil {
@@ -1382,43 +1362,21 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		if err := s.trie.TryUpdate_SetKey(keyToInsert[:], AccountsToInactivate[index]); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", keyToInsert[:], err))
 		} else {
+			// (joonha)
 			fmt.Println("joonha 1")
-			// apply inactivation result to AddrToKey (joonha)
+			
+			// apply inactivation result to AddrToKey 
 			// Q. Should this be applied to AddrToKey_Dirty?
 			common.AddrToKey[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
-			// Q. AddrToKey_inactive도 Dirty가 필요할까?
-			// save the inactive account key info for later restoration (joonha)
-
-			// len이 아니라 NoExistKey가 나오기 전까지 iterate 해야 할 듯.
-			// lenATKI := len(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
-			// latest := 0
-			// i := 0
-			// fmt.Println("lenATKI: ", lenATKI)
-			// fmt.Println("joonha 2")
-			// for i <= lenATKI {
-			// 	fmt.Println("joonha 3")
-			// 	latest = i
-			// 	if int64(i) == common.HashToInt64(common.NoExistKey) {
-			// 		break
-			// 	}
-			// 	i++
-			// }
 			
 			fmt.Println("joonha 4")
 
-			// if common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] == nil{
-			// 	fmt.Println("joonha 5")
-			// 	common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] = make([]common.Hash, 1)
-			// }
-
-			// append를 사용하면 메모리 참조 문제 해결될 것.
-			// common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] = make([]common.Hash, 1)
+			// save the inactive account key info for later restoration 
+			// Q. AddrToKey_inactive도 Dirty가 필요할까?
 			common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] = append(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])], keyToInsert)
+			
 			fmt.Println("addrToKey_inactive is ", common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
 			fmt.Println("acc: ", common.BytesToAddress(AccountsToInactivate[index]))
-			// fmt.Println("latest: ", latest)
-			// fmt.Println("keyToInsert: ", keyToInsert)
-
 		}
 	}
 
