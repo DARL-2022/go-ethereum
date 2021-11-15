@@ -270,6 +270,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if addr == common.HexToAddress("0x0123456789012345678901234567890123456789") { // restoration
 
 		common.Restoring = 1 // restoration starts
+		common.Restoring_create = 0 
 
 		log.Info("\n")
 
@@ -510,23 +511,36 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 
 		// CREATE OR MERGE
+		keysToDelete := make([]common.Hash, 0)
 
-		// CREATE (no Active account in active trie)
+		// CREATE (no Active account in the active trie)
 		log.Info("### flag 10")
 		if(common.HashToInt64(common.AddrToKey[inactiveAddr]) <= common.InactiveBoundaryKey) {
 			log.Info("### flag 11")
-			common.Restoring = 0 // ref: statedb.go/getDeletedStateObject function
+			common.Restoring_create = 1 // ref: statedb.go/getDeletedStateObject function
 			evm.StateDB.CreateAccount(inactiveAddr) // create inactive account to state trie
-			common.Restoring = 1
+			// common.Restoring_create = 0
 			log.Info("### flag 12")
+			log.Info("restoring Balance", "restoring Balance", accounts[1].Balance)
 			resAcc.Balance.Add(resAcc.Balance, accounts[1].Balance)
 			log.Info("### flag 13")
-		} else { // MERGE (Active account in active trie)
+		} else { // MERGE (Active account exists in the active trie)
 			log.Info("### flag 14")
+			common.Restoring = 0 // ref: statedb.go/getDeletedStateObject function
 			activeBalance := evm.StateDB.GetBalance(inactiveAddr) // Addr의 GetBalance가 맞고, inactive 것은 제외되고 있음.
+			common.Restoring = 1
+			log.Info("activeBalance", "activeBalance", activeBalance)
+			log.Info("restoring Balance", "restoring Balance", accounts[1].Balance)
 			log.Info("### flag 15")
 			resAcc.Balance.Add(activeBalance, accounts[1].Balance)
 			log.Info("### flag 16")
+
+			// update하면서 기존 것을 nil로 바꾸거나 해줘야 함.
+			// restore도 하나의 업데이트니까.
+
+			// when restoring by merging, preexisting account should be deleted (joonha)
+			keysToDelete = append(common.KeysToDelete, common.AddrToKey[inactiveAddr])
+
 		}
 
 		// 세 번째 인자로 최종 balance를 넘김.
@@ -563,9 +577,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// Remove inactive account from inactive Trie!	
 		
 		// common.KeysToDelete = make([]common.Hash, 0) // init // added when debugging
-		keysToDelete := append(common.KeysToDelete, common.BytesToHash(inactiveKey[:]))
+		keysToDelete = append(keysToDelete, common.BytesToHash(inactiveKey[:]))
 		evm.StateDB.DeletePreviousLeafNodes(keysToDelete)
-		common.KeysToDelete = make([]common.Hash, 0) // init
+		// common.KeysToDelete = make([]common.Hash, 0) // init
 
 		// restoration ends
 		common.Restoring = 0 

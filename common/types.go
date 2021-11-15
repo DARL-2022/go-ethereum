@@ -51,8 +51,13 @@ const (
 // }
 
 var (
-	Flag = int64(0) // (joonha) debugging
-	Restoring = int64(0) // (joonha)
+	// (joonha)
+	Flag = int64(0) 
+	Restoring = int64(0)
+	// ReNew = int64(0)
+	// NewAmount = big.NewInt(0)
+	PrevAmount = make(map[Address]*big.Int)
+	Restoring_create = 	int64(0)
 
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
@@ -64,7 +69,7 @@ var (
 
 	// map storing inactive accounts list (joonha)
 	// AddrToKey_inactive = make(map[Address]map[int64]Hash)
-	AddrToKey_inactive = make(map[Address][]Hash) ///////////////////////
+	AddrToKey_inactive = make(map[Address][]Hash)
 
 	KeysToDelete = make([]Hash, 0) // store previous leaf nodes' keys to delete later
 	DeleteLeafNodeEpoch = int64(3) // block epoch to delete previous leaf nodes (& inactivate inactive leaf nodes) (const)
