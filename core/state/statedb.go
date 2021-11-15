@@ -555,6 +555,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		if err = s.trie.TryUpdate_SetKey(addrKey[:], data); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
+		common.PrevAmount[addr] = obj.data.Balance // (joonha)		
 	} else if addrKey_bigint.Int64() >= common.InactiveBoundaryKey { // InactiveBoundaryKey 이후여야 함!!!!!!!!!! (joonha)
 		// this address is already in the trie, so move the previous leaf node to the right side (delete & insert)
 
@@ -578,7 +579,10 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		// fmt.Println("move leaf node to right -> addr:", addr.Hex(), "/ keyHash:", newAddrHash)
 		obj.addrHash = newAddrHash
 		s.NextKey += 1
-	} else { // (joonha) 
+
+		common.PrevAmount[addr] = obj.data.Balance // (joonha)
+
+	} else { // adding new account where inactive account might already exist (joonha) 
 		// there CAN be an inactive account. If then, act like this account is a new account. 
 		// also Updating AddrToKey is needed.
 		// No deletion is needed.
@@ -587,12 +591,31 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		newAddrHash := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
 		s.AddrToKeyDirty[addr] = newAddrHash
 		// fmt.Println("insert -> key:", newAddrHash.Hex(), "/ addr:", addr.Hex())
+		
+		// balance
+		if common.Restoring == 0 && common.Restoring_create == 0 { // Create not by restoring
+			// obj의 data의 Balance를 새 balance로 초기화 한 후 사용해야 함.
+			// 거래 데이터의 input 값을 받을 수 있어야 함.
+			// fmt.Println("\n\nobj.data.Balance: ", obj.data.Balance, "\n\n")
+			obj.data.Balance = obj.data.Balance.Sub(obj.data.Balance, common.PrevAmount[addr])
+			// fmt.Println("\n\ncommon.PrevAmount: ", common.PrevAmount, "\n\n")
+			// fmt.Println("\n\nobj.data.Balance: ", obj.data.Balance, "\n\n")
+			data, err = rlp.EncodeToBytes(obj)
+		} 
+
+		// // when restoring by merging, preexisting account should be deleted (joonha)
+		// if common.Restoring == 1 {
+		// 	s.KeysToDeleteDirty = append(s.KeysToDeleteDirty, addrKey)
+		// }
+
 		if err = s.trie.TryUpdate_SetKey(newAddrHash[:], data); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
 		// fmt.Println("move leaf node to right -> addr:", addr.Hex(), "/ keyHash:", newAddrHash)
 		obj.addrHash = newAddrHash
 		s.NextKey += 1
+
+		// common.ReNew = 0
 	}
 
 	// original code
@@ -716,7 +739,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		// Double Restoration Problem - Debugging 
 		// 지금 문제는 두 inactive account에 대해서 같은 addr로 retrieve를 하려니까
 		// 당연히 그에 대응하는 account가 없다고 뜨는 것임.
-		// 그러므로 만약 restor 중이라면 AddrToKey가 아닌 AddrToKey_inactive로부터 key를 받아내면 될 듯.
+		// 그러므로 만약 restore 중이라면 AddrToKey가 아닌 AddrToKey_inactive로부터 key를 받아내면 될 듯.
 		if common.Restoring == 1 { // during Restoration
 			lastIndex := len(common.AddrToKey_inactive[addr]) - 1
 			if lastIndex < 0 { // error handling
@@ -727,7 +750,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 
 		enc, err := s.trie.TryGet_SetKey(key[:]) // 키로 account를 받아옴.
 
-		// 기존에는 아래처럼 addr로부터 accoun 를 받아오고 있었는데, 이는 도중에 해싱을 하는 함수였음.
+		// 기존에는 아래처럼 addr로부터 account 를 받아오고 있었는데, 이는 도중에 해싱을 하는 함수였음.
 		// enc, err := s.trie.TryGet(addr.Bytes()) // get account from state trie // --> original code
 
 		if err != nil {
@@ -785,7 +808,23 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	// 여기서 쓰이는 getDeletedStateObject도 addr을 넘겼었는데 문제가 없었나? (joonha)
 	// addr을 넘기는 것이 맞음.
 	
+	// addr에 해당하는 account가 존재하는지를 확인하는 것.
+	// 원래는 addr을 해싱하여 그것을 키로 하는 leaf node에 account가 있는지 확인하고
+	// 있다면 prev에 저장한다. 
+	// 이 prev는 저널링에 사용되는 듯하다. 
+	// 아무튼 Ethane에서는 common.Restoring 옵션을 끄고 수행하는 것이 맞는 듯함.
+
+	// original code
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
+
+	// if common.Restoring == 1 {
+	// 	prev = nil
+	// 	// common.Restoring = 0
+	// 	// prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
+	// 	// common.Restoring = 1
+	// } else {
+	// 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
+	// }
 
 	var prevdestruct bool
 	if s.snap != nil && prev != nil {
@@ -821,7 +860,24 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 func (s *StateDB) CreateAccount(addr common.Address) {
 	newObj, prev := s.createObject(addr)
 	if prev != nil {
-		newObj.setBalance(prev.data.Balance)
+		newObj.setBalance(prev.data.Balance) // --> original code
+
+		// // During restoration, do not inherit prev's balance (joonha)
+		// addrKey, doExist := s.AddrToKeyDirty[addr]
+		// if !doExist {
+		// 	addrKey = common.AddrToKey[addr]
+		// }
+		// addrKey_bigint := new(big.Int)
+		// addrKey_bigint.SetString(addrKey.Hex()[2:], 16)
+
+
+		// if common.Restoring == 1 { // when restoring
+		// 	newObj.setBalance(big.NewInt(0))		
+		// } else if addrKey_bigint.Int64() < common.InactiveBoundaryKey { // new obj when inactive acc exists
+		// 	newObj.setBalance(big.NewInt(0))
+		// } else {
+		// 	newObj.setBalance(prev.data.Balance)	
+		// }
 	}
 }
 
@@ -1068,7 +1124,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// first, giving the account prefeches just a few more milliseconds of time
 	// to pull useful data from disk.
 	for addr := range s.stateObjectsPending {
-		if obj := s.stateObjects[addr]; !obj.deleted {
+		if obj := s.stateObjects[addr]; !obj.deleted { // 여기서 addr로 stateObject를 받아오니까 inactivate해도 여전히 balance가 더해지는 것이다. (joonha)
 			obj.updateRoot(s.db)
 		}
 	}
@@ -1325,7 +1381,7 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 	fmt.Println("trie root before inactivate leaf nodes:", s.trie.Hash().Hex())
 
 	// TODO: optimize this code, this is too naive
-	normTrie := s.trie.GetTrie() // TODO: using this function, we can delete SecureTrie.***_SetKey functions
+	// normTrie := s.trie.GetTrie() // TODO: using this function, we can delete SecureTrie.***_SetKey functions
 	AccountsToInactivate := make([][]byte, 0)
 	KeysToInactivate := make([]common.Hash, 0)
 	for i := inactiveBoundaryKey; i < lastKeyToCheck; i++ {
@@ -1333,11 +1389,11 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		hash := common.Int64ToHash(i)
 
 		// original code by jmlee
-		leafNode, err := normTrie.TryGet(hash[:])
+		// leafNode, err := normTrie.TryGet(hash[:])
 
 		// 위 코드에서 TryGet_SetKey가 아닌 TryGet을 사용하고 있다. 
 		// 문제가 없는지 주시할 것.
-		// leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
+		leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
 
 		// find inactive leaf node, append the key to the list
 		if leafNode != nil && err == nil {
@@ -1368,6 +1424,7 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			// apply inactivation result to AddrToKey 
 			// Q. Should this be applied to AddrToKey_Dirty?
 			common.AddrToKey[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
+			s.AddrToKeyDirty[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
 			
 			fmt.Println("joonha 4")
 
