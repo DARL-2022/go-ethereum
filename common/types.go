@@ -51,11 +51,9 @@ const (
 // }
 
 var (
-	// (joonha)
+	// for restoring (joonha)
 	Flag = int64(0) 
 	Restoring = int64(0)
-	// ReNew = int64(0)
-	// NewAmount = big.NewInt(0)
 	PrevAmount = make(map[Address]*big.Int)
 	Restoring_create = 	int64(0)
 
@@ -68,14 +66,14 @@ var (
 	AddrToKeyPath = "" // disk path to save AddrToKey (will be set as [datadir]/geth/chaindata/) (const)
 
 	// map storing inactive accounts list (joonha)
-	// AddrToKey_inactive = make(map[Address]map[int64]Hash)
 	AddrToKey_inactive = make(map[Address][]Hash)
 
 	KeysToDelete = make([]Hash, 0) // store previous leaf nodes' keys to delete later
-	DeleteLeafNodeEpoch = int64(3) // block epoch to delete previous leaf nodes (& inactivate inactive leaf nodes) (const)
+	DeleteLeafNodeEpoch = int64(3) // block epoch to delete previous leaf nodes (from active area to temp area) (const)
 	// DeleteLeafNodeEpoch = big.NewInt(3) // block epoch to delete previous leaf nodes (& inactivate inactive leaf nodes) (const)
 	DoDeleteLeafNode bool // flag to determine whether to delete leaf nodes or not
-
+	
+	InactivateLeafNodeEpoch = int64(3) // block epoch to inactivate inactive leaf nodes (from temp area to inactive trie) (joonha)
 	InactiveBoundaryKey = int64(0) // inactive accounts have keys smaller than this key
 	InactivateCriterion = int64(1) // inactive accounts were touched more before than this block timestamp (min: 1) (const)
 	CheckpointKeys = make(map[int64]int64) // initial NextKeys of blocks (CheckpointKeys[blockNumber] = initialNextKeyOfTheBlock)

@@ -1088,7 +1088,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 	}
 
 	// inactivate inactive accounts (jmlee)
-	if header.Number.Int64() % common.DeleteLeafNodeEpoch == 0 {
+	if header.Number.Int64() % common.InactivateLeafNodeEpoch == 0 {
 		lastKeyToCheck := common.CheckpointKeys[header.Number.Int64()-common.InactivateCriterion+1]
 		inactivatedAccountsNum := w.current.state.InactivateLeafNodes(common.InactiveBoundaryKey, lastKeyToCheck)
 		common.InactiveBoundaryKey += inactivatedAccountsNum
