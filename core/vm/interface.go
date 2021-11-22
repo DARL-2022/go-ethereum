@@ -83,13 +83,11 @@ type StateDB interface {
 
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) error
 
-	// Database returns database in stateDB (jmlee)
+	// using statedb methods in evm.go (joonha)
 	Database() state.Database
-
-	// (joonha)
-
 	DeletePreviousLeafNodes([]common.Hash)
-	
+	CreateAccount_restoring(common.Address)
+	Exist_InInactiveTrie(common.Address) bool	
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

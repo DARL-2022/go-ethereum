@@ -280,6 +280,11 @@ func (s *StateDB) Exist(addr common.Address) bool {
 	return s.getStateObject(addr) != nil
 }
 
+// Exist_InInactiveTrie checks if the account exists in the inactive trie (joonha)
+func (s *StateDB) Exist_InInactiveTrie(addr common.Address) bool {
+	return s.getStateObject_FromInactiveTrie(addr) != nil
+}
+
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
 func (s *StateDB) Empty(addr common.Address) bool {
@@ -593,7 +598,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		// fmt.Println("insert -> key:", newAddrHash.Hex(), "/ addr:", addr.Hex())
 		
 		// balance
-		if common.Restoring == 0 && common.Restoring_create == 0 { // Create not by restoring
+		if common.Restoring == 0 && common.RestoringByCreation == 0 { // Create not by restoring
 			// obj의 data의 Balance를 새 balance로 초기화 한 후 사용해야 함.
 			// 거래 데이터의 input 값을 받을 수 있어야 함.
 			// fmt.Println("\n\nobj.data.Balance: ", obj.data.Balance, "\n\n")
@@ -603,19 +608,12 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 			data, err = rlp.EncodeToBytes(obj)
 		} 
 
-		// // when restoring by merging, preexisting account should be deleted (joonha)
-		// if common.Restoring == 1 {
-		// 	s.KeysToDeleteDirty = append(s.KeysToDeleteDirty, addrKey)
-		// }
-
 		if err = s.trie.TryUpdate_SetKey(newAddrHash[:], data); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
 		// fmt.Println("move leaf node to right -> addr:", addr.Hex(), "/ keyHash:", newAddrHash)
 		obj.addrHash = newAddrHash
 		s.NextKey += 1
-
-		// common.ReNew = 0
 	}
 
 	// original code
@@ -653,7 +651,15 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 // the object is not found or was deleted in this execution context. If you need
 // to differentiate between non-existent/just-deleted, use getDeletedStateObject.
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
-	if obj := s.getDeletedStateObject(addr); obj != nil && !obj.deleted {
+	// if obj := s.getDeletedStateObject(addr); obj != nil && !obj.deleted { // --> original code
+	if obj := s.getDeletedStateObject(addr, 0); obj != nil && !obj.deleted { // get obj from the active trie (joonha)
+		return obj
+	}
+	return nil
+}
+
+func (s *StateDB) getStateObject_FromInactiveTrie(addr common.Address) *stateObject {
+	if obj := s.getDeletedStateObject(addr, 1); obj != nil && !obj.deleted { // get obj from the active trie (joonha)
 		return obj
 	}
 	return nil
@@ -663,7 +669,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 // nil for a deleted state object, it returns the actual object with the deleted
 // flag set. This is needed by the state journal to revert to the correct s-
 // destructed object instead of wiping all knowledge about the state object.
-func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
+func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *stateObject {
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
@@ -729,18 +735,11 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		}
 
 		// (joonha)
-		// 여기서 TryGet에 addr을 넘겨주면 되는 것인가
-		// restore하는 경우와 다른 경우들을 구분을 좀 해야 할 듯함. (joonha)
-		// 혹은 애초에 evm.go에서 Exist 검사를 inactiveAddr 이 아닌 inactiveKey로 하면 되지 않는가?!!
-
-		// key := s.AddrToKeyDirty[addr] // ERROR
 		key := common.AddrToKey[addr]
 
-		// Double Restoration Problem - Debugging 
-		// 지금 문제는 두 inactive account에 대해서 같은 addr로 retrieve를 하려니까
-		// 당연히 그에 대응하는 account가 없다고 뜨는 것임.
-		// 그러므로 만약 restore 중이라면 AddrToKey가 아닌 AddrToKey_inactive로부터 key를 받아내면 될 듯.
-		if common.Restoring == 1 { // during Restoration
+		// during restoration, get an obj from the inactiveTrie (joonha)
+		// *** Commenting this part out, Error occurs.
+		if restoring == 1 {
 			lastIndex := len(common.AddrToKey_inactive[addr]) - 1
 			if lastIndex < 0 { // error handling
 				return nil
@@ -805,26 +804,46 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 		s.NextKey += 1
 	}
 
-	// 여기서 쓰이는 getDeletedStateObject도 addr을 넘겼었는데 문제가 없었나? (joonha)
-	// addr을 넘기는 것이 맞음.
-	
-	// addr에 해당하는 account가 존재하는지를 확인하는 것.
-	// 원래는 addr을 해싱하여 그것을 키로 하는 leaf node에 account가 있는지 확인하고
-	// 있다면 prev에 저장한다. 
-	// 이 prev는 저널링에 사용되는 듯하다. 
-	// 아무튼 Ethane에서는 common.Restoring 옵션을 끄고 수행하는 것이 맞는 듯함.
+	// get the object from the active trie (joonha)
+	prev = s.getDeletedStateObject(addr, 0) // Note, prev might have been deleted, we need that!
 
-	// original code
-	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
+	var prevdestruct bool
+	if s.snap != nil && prev != nil {
+		_, prevdestruct = s.snapDestructs[prev.addrHash]
+		if !prevdestruct {
+			s.snapDestructs[prev.addrHash] = struct{}{}
+		}
+	}
+	newobj = newObject(s, addr, Account{})
+	newobj.setNonce(0) // sets the object to dirty
+	if prev == nil {
+		s.journal.append(createObjectChange{account: &addr})
+	} else {
+		s.journal.append(resetObjectChange{prev: prev, prevdestruct: prevdestruct})
+	}
+	s.setStateObject(newobj)
+	if prev != nil && !prev.deleted {
+		return newobj, prev
+	}
+	return newobj, nil
+}
 
-	// if common.Restoring == 1 {
-	// 	prev = nil
-	// 	// common.Restoring = 0
-	// 	// prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
-	// 	// common.Restoring = 1
-	// } else {
-	// 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
-	// }
+// createObject_restoring creates an object restored from the inactive trie (joonha)
+func (s *StateDB) createObject_restoring(addr common.Address) (newobj, prev *stateObject) {
+
+	// insert to map to make compactTrie (jmlee)
+	_, doExist := common.AddrToKey[addr]
+	if !doExist && addr != common.ZeroAddress {
+		newAddrKey := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
+		// fmt.Println("make new account -> addr:", addr.Hex(), "/ keyHash:", newAddrKey)
+		s.AddrToKeyDirty[addr] = newAddrKey
+		s.NextKey += 1
+	}
+
+	// (joonha)
+	// prev is the deleted object that would be converted into the active object
+	// get the object from the inactiveTrie
+	prev = s.getDeletedStateObject(addr, 1) // Note, prev might have been deleted, we need that!
 
 	var prevdestruct bool
 	if s.snap != nil && prev != nil {
@@ -861,23 +880,14 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	newObj, prev := s.createObject(addr)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance) // --> original code
+	}
+}
 
-		// // During restoration, do not inherit prev's balance (joonha)
-		// addrKey, doExist := s.AddrToKeyDirty[addr]
-		// if !doExist {
-		// 	addrKey = common.AddrToKey[addr]
-		// }
-		// addrKey_bigint := new(big.Int)
-		// addrKey_bigint.SetString(addrKey.Hex()[2:], 16)
-
-
-		// if common.Restoring == 1 { // when restoring
-		// 	newObj.setBalance(big.NewInt(0))		
-		// } else if addrKey_bigint.Int64() < common.InactiveBoundaryKey { // new obj when inactive acc exists
-		// 	newObj.setBalance(big.NewInt(0))
-		// } else {
-		// 	newObj.setBalance(prev.data.Balance)	
-		// }
+// CreateAccount_restoring restores account by creation (joonha)
+func (s *StateDB) CreateAccount_restoring(addr common.Address) {
+	newObj, prev := s.createObject_restoring(addr)
+	if prev != nil {
+		newObj.setBalance(prev.data.Balance)
 	}
 }
 
