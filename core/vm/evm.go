@@ -270,7 +270,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if addr == common.HexToAddress("0x0123456789012345678901234567890123456789") { // restoration
 
 		common.Restoring = 1 // restoration starts
-		common.Restoring_create = 0 
+		common.RestoringByCreation = 0 
 
 		log.Info("\n")
 
@@ -461,7 +461,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		// deal with the checkpointBlock's account state
 		log.Info("### account num", "len(accounts)", len(accounts))
-		isExist := cachedState.Exist(inactiveAddr)
+		isExist := cachedState.Exist_InInactiveTrie(inactiveAddr)
 
 		// inactive 영역에도 있고 active 영역에도 있으면, GetAccount는 무엇을 받아올까? 
 		// 이 부분을 명확히 해 주어야 할 듯.
@@ -517,9 +517,14 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		log.Info("### flag 10")
 		if(common.HashToInt64(common.AddrToKey[inactiveAddr]) <= common.InactiveBoundaryKey) {
 			log.Info("### flag 11")
-			common.Restoring_create = 1 // ref: statedb.go/getDeletedStateObject function
-			evm.StateDB.CreateAccount(inactiveAddr) // create inactive account to state trie
-			// common.Restoring_create = 0
+			common.RestoringByCreation = 1 // ref: statedb.go/getDeletedStateObject function
+
+			// 모듈화 해야 하는 부분
+			/////////////////////////////////////////////////////////////////////////////////
+			evm.StateDB.CreateAccount_restoring(inactiveAddr) // create inactive account to state trie
+			/////////////////////////////////////////////////////////////////////////////////
+
+			// common.RestoringByCreation = 0
 			log.Info("### flag 12")
 			log.Info("restoring Balance", "restoring Balance", accounts[1].Balance)
 			resAcc.Balance.Add(resAcc.Balance, accounts[1].Balance)
@@ -527,7 +532,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		} else { // MERGE (Active account exists in the active trie)
 			log.Info("### flag 14")
 			common.Restoring = 0 // ref: statedb.go/getDeletedStateObject function
+			
+			// 모듈화 해야 하는 부분
+			/////////////////////////////////////////////////////////////////////////////////
 			activeBalance := evm.StateDB.GetBalance(inactiveAddr) // Addr의 GetBalance가 맞고, inactive 것은 제외되고 있음.
+			/////////////////////////////////////////////////////////////////////////////////
+
 			common.Restoring = 1
 			log.Info("activeBalance", "activeBalance", activeBalance)
 			log.Info("restoring Balance", "restoring Balance", accounts[1].Balance)

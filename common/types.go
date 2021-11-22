@@ -55,7 +55,7 @@ var (
 	Flag = int64(0) 
 	Restoring = int64(0)
 	PrevAmount = make(map[Address]*big.Int)
-	Restoring_create = 	int64(0)
+	RestoringByCreation = int64(0)
 
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
