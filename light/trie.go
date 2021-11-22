@@ -122,6 +122,11 @@ func (t *odrTrie) TryGet_SetKey(key []byte) ([]byte, error) {
 	return nil, nil
 }
 
+// temp function for correct build, this will not be called in Ethane (joonha)
+func (t *odrTrie) TryGetAll_SetKey(firstKey, lastKey []byte) ([][]byte, []common.Hash, error) {
+	return nil, nil, nil
+}
+
 func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	key = crypto.Keccak256(key)
 	var res []byte

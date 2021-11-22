@@ -580,13 +580,29 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		// also Updating AddrToKey is needed.
 		// No deletion is needed.
 
+		fmt.Println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+		fmt.Println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+		fmt.Println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+		fmt.Println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+		fmt.Println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+
 		// insert new leaf node at right side
 		newAddrHash := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
 		s.AddrToKeyDirty[addr] = newAddrHash
 		// fmt.Println("insert -> key:", newAddrHash.Hex(), "/ addr:", addr.Hex())
 		
+		// create not by restoring은 updatestateobject가 아니라 create로 여겨져야 한다.
+		// 현재는 여기에서 업데이트를 하고 있으니까 
+		// 이렇게 하지 말고 create를 해야 할 듯?
+
+		// creating by restoring은 이미 evm.go에서 처리함.
+		// creating a crumb account는 여기서 수행함.
+		// 아닌 경우가 있을까?
+		// 예를 들어서 restoring = 1 이라면? 여기에 걸릴 일이 있을까? -> merging 시에 여기 걸림.
+		// 혹은 restoringByCreation = 1 인 경우가 있나? -> create 한 경우에도 여기에서 trie 업데이트를 하는 듯.
+
 		// balance
-		if common.Restoring == 0 && common.RestoringByCreation == 0 { // Create not by restoring
+		if common.Restoring == 0 && common.RestoringByCreation == 0 { // Create not by restoring (creating a crumb account)
 			// obj의 data의 Balance를 새 balance로 초기화 한 후 사용해야 함.
 			// 거래 데이터의 input 값을 받을 수 있어야 함.
 			// fmt.Println("\n\nobj.data.Balance: ", obj.data.Balance, "\n\n")
@@ -1356,28 +1372,36 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 
 	// TODO: optimize this code, this is too naive
 	// normTrie := s.trie.GetTrie() // TODO: using this function, we can delete SecureTrie.***_SetKey functions
-	AccountsToInactivate := make([][]byte, 0)
-	KeysToInactivate := make([]common.Hash, 0)
-	for i := inactiveBoundaryKey; i < lastKeyToCheck; i++ {
-		// check there is leaf node with this key
-		hash := common.Int64ToHash(i)
+	
+	// AccountsToInactivate := make([][]byte, 0)
+	// KeysToInactivate := make([]common.Hash, 0)
+	// for i := inactiveBoundaryKey; i < lastKeyToCheck; i++ {
+	// 	// check there is leaf node with this key
+	// 	hash := common.Int64ToHash(i)
 
-		// original code by jmlee
-		// leafNode, err := normTrie.TryGet(hash[:])
+	// 	// leafNode, err := normTrie.TryGet(hash[:]) // original code by jmlee
+	// 	leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
 
-		// 위 코드에서 TryGet_SetKey가 아닌 TryGet을 사용하고 있다. 
-		// 문제가 없는지 주시할 것.
-		leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
+	// 	// find inactive leaf node, append the key to the list
+	// 	if leafNode != nil && err == nil {
+	// 		fmt.Println("O: there is a leaf node at key", hash.Hex())
+	// 		AccountsToInactivate = append(AccountsToInactivate, leafNode)
+	// 		KeysToInactivate = append(KeysToInactivate, hash)
+	// 	} else {
+	// 		fmt.Println("X: there is no leaf node at key", hash.Hex())
+	// 	}
+	// }
 
-		// find inactive leaf node, append the key to the list
-		if leafNode != nil && err == nil {
-			fmt.Println("O: there is a leaf node at key", hash.Hex())
-			AccountsToInactivate = append(AccountsToInactivate, leafNode)
-			KeysToInactivate = append(KeysToInactivate, hash)
-		} else {
-			fmt.Println("X: there is no leaf node at key", hash.Hex())
-		}
-	}
+	// DFS the non-nil account from the trie (joonha)
+	// secure_trie.go/TryGet_SetKey -> trie.go/TryGet -> trie.go/tryGet
+	// tryGet은 재귀로 최종 value를 리턴함.
+	// 이 tryGet을 이용해서 존재하면 저장 후 계속하면 될 듯. (방향과 범위 유의.)
+	firstKey := common.Int64ToHash(inactiveBoundaryKey)
+	lastKey := common.Int64ToHash(lastKeyToCheck)
+	AccountsToInactivate, KeysToInactivate, _ := s.trie.TryGetAll_SetKey(firstKey[:], lastKey[:])
+
+
+
 	// move inactive leaf nodes to left
 	for index, key := range KeysToInactivate {
 		// delete inactive leaf node

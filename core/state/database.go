@@ -109,6 +109,9 @@ type Trie interface {
 	TryUpdate_SetKey(key, value []byte) error
 
 	TryGet_SetKey(key []byte) ([]byte, error)
+
+	// (joonha)
+	TryGetAll_SetKey([]byte, []byte) ([][]byte, []common.Hash, error)
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for

@@ -41,6 +41,10 @@ var (
 
 	// emptyState is the known hash of an empty state trie entry.
 	emptyState = crypto.Keccak256Hash(nil)
+
+	// to save the leaf info while traversing the trie (joonha)
+	Accounts = make([][]byte, 0)
+	Keys = make([]common.Hash, 0)	
 )
 
 // LeafCallback is a callback type invoked when a trie operation reaches a leaf
@@ -120,12 +124,26 @@ func (t *Trie) Get(key []byte) []byte {
 // TryGet returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
-func (t *Trie) TryGet(key []byte) ([]byte, error) { // addr 이 아닌 Key 가 들어오는 게 맞는 듯함. (joonha)
-	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
+func (t *Trie) TryGet(key []byte) ([]byte, error) {
+	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0) // 마지막 파라미터로 position을 넘겨주고 있음. 이를 이용하면 좋을 듯. (joonha)
 	if err == nil && didResolve {
 		t.root = newroot
 	}
 	return value, err
+}
+
+// return the found accounts and the keys of the accounts (joonha)
+func (t *Trie) TryGetAll(firstKey, lastKey []byte) ([][]byte, []common.Hash, error) {
+	
+	// init
+	Accounts = make([][]byte, 0)
+	Keys = make([]common.Hash, 0)	
+	
+	_, newroot, didResolve, err := t.tryGetAll(t.root, keybytesToHex(firstKey), keybytesToHex(firstKey), keybytesToHex(lastKey), 0) // 마지막 파라미터로 position을 넘겨주고 있음. 이를 이용하면 좋을 듯. (joonha)
+	if err == nil && didResolve {
+		t.root = newroot
+	}
+	return Accounts, Keys, err
 }
 
 func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
@@ -158,6 +176,76 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 			return nil, n, true, err
 		}
 		value, newnode, _, err := t.tryGet(child, key, pos)
+		return value, newnode, true, err
+	default:
+		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+	}
+}
+
+// DFS by recursion (joonha)
+func (t *Trie) tryGetAll(origNode node, key, firstKey, lastKey []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
+	
+	// should touch from the firstKey to the laskKey
+	// TODO: firstKey가 필요 없다면 지우기
+
+	// pos: key의 각 숫자를 포인팅하는 변수 (앞에서 뒤로 하나씩 읽기 위함.)
+	// key의 범위가 firstKey에서 lastKey를 벗어나면 검색을 리턴해야 함.
+
+	switch n := (origNode).(type) {
+	case nil:
+		return nil, nil, false, nil
+	case valueNode: // leaf node
+		
+		// in this case, should archive the node into the result array
+		if n != nil {
+			Accounts = append(Accounts, n)
+			Keys = append(Keys, common.BytesToHash(key))
+		}
+
+		return n, n, false, nil
+	case *shortNode:
+		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
+			// key not found in trie
+			return nil, n, false, nil
+		}
+		value, newnode, didResolve, err = t.tryGetAll(n.Val, key, firstKey, lastKey, pos+len(n.Key))
+		if err == nil && didResolve {
+			n = n.copy()
+			n.Val = newnode
+		}
+		return value, n, didResolve, err
+	case *fullNode: 
+		// 기존에는 해당하는 pos 밑으로만 내려감.
+		// value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1) // --> original code
+
+		// fullnode에서 16개의 브랜치를 모두 탐색함.
+		for i := 0; i < 16; i++ {
+			value, newnode, didResolve, err = t.tryGetAll(n.Children[i], key, firstKey, lastKey, pos+1) // --> original code
+			
+			// 탐색 타깃을 변경
+			if key[pos] != 'f' {
+				key[pos] = key[pos] + 1 
+			} else {
+				key[pos] = 0
+			}
+
+			// 만약 lastKey를 넘어가면 탐색 종료
+			if bytes.Compare(key, lastKey) == 1 { // key > lastKey
+				break;
+			}
+		}
+
+		if err == nil && didResolve {
+			n = n.copy()
+			n.Children[key[pos]] = newnode
+		}
+		return value, n, didResolve, err
+	case hashNode:
+		child, err := t.resolveHash(n, key[:pos])
+		if err != nil {
+			return nil, n, true, err
+		}
+		value, newnode, _, err := t.tryGetAll(child, key, firstKey, lastKey, pos)
 		return value, newnode, true, err
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))

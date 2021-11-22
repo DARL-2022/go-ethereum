@@ -88,6 +88,11 @@ func (t *SecureTrie) TryGet_SetKey(key []byte) ([]byte, error) {
 	return t.trie.TryGet(key)
 }
 
+// DFS the range (from inactiveBoundaryKey to lastKeyToCheck) and return the found accounts (joonha)
+func (t *SecureTrie) TryGetAll_SetKey(firstKey, lastKey []byte) ([][]byte, []common.Hash, error) {
+	return t.trie.TryGetAll(firstKey, lastKey)
+}
+
 // TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
 // possible to use keybyte-encoding as the path might contain odd nibbles.
 func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {
