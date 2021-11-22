@@ -1429,22 +1429,22 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 	// }
 
 	// DFS the non-nil account from the trie (joonha)
-	// secure_trie.go/TryGet_SetKey -> trie.go/TryGet -> trie.go/tryGet
-	// tryGet은 재귀로 최종 value를 리턴함.
-	// 이 tryGet을 이용해서 존재하면 저장 후 계속하면 될 듯. (방향과 범위 유의.)
+	// secure_trie.go/TryGetAll_SetKey -> trie.go/TryGetAll -> trie.go/tryGetAll
 	firstKey := common.Int64ToHash(inactiveBoundaryKey)
 	lastKey := common.Int64ToHash(lastKeyToCheck)
 	AccountsToInactivate, KeysToInactivate, _ := s.trie.TryGetAll_SetKey(firstKey[:], lastKey[:])
 
-
+	fmt.Println("Accounts length: ", len(AccountsToInactivate))
+	fmt.Println("Keys length: ", len(KeysToInactivate))
 
 	// move inactive leaf nodes to left
-	for index, key := range KeysToInactivate {
-		// delete inactive leaf node
-		fmt.Println("delete previous leaf node -> key:", key.Hex())
-		if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
-			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
-		}
+	for index, _ := range KeysToInactivate {
+
+		// // delete inactive leaf node --> change to deleting during DFS (joonha)
+		// fmt.Println("delete previous leaf node -> key:", key.Hex())
+		// if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
+		// 	s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
+		// }
 
 		// insert inactive leaf node to left
 		keyToInsert := common.Int64ToHash(inactiveBoundaryKey + int64(index))

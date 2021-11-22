@@ -144,7 +144,7 @@ func (t *Trie) TryGetAll(firstKey, lastKey []byte) ([][]byte, []common.Hash, err
 	Accounts = make([][]byte, 0)
 	Keys = make([]common.Hash, 0)	
 	
-	_, newroot, didResolve, err := t.tryGetAll(t.root, keybytesToHex(firstKey), keybytesToHex(firstKey), keybytesToHex(lastKey), 0) // 마지막 파라미터로 position을 넘겨주고 있음. 이를 이용하면 좋을 듯. (joonha)
+	_, newroot, didResolve, err := t.tryGetAll(t.root, keybytesToHex(firstKey), keybytesToHex(lastKey), 0) // 마지막 파라미터로 position을 넘겨주고 있음. 이를 이용하면 좋을 듯. (joonha)
 	if err == nil && didResolve {
 		t.root = newroot
 	}
@@ -188,55 +188,68 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 }
 
 // DFS by recursion (joonha)
-func (t *Trie) tryGetAll(origNode node, key, firstKey, lastKey []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
+func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
 	
 	// should touch from the firstKey to the laskKey
-	// TODO: firstKey가 필요 없다면 지우기
+	// TODO: nil로의 업데이트를 여기서 한번에 수행해도 좋을 듯 (inactivation을 위해 만든 함수이므로)
 
-	// pos: key의 각 숫자를 포인팅하는 변수 (앞에서 뒤로 하나씩 읽기 위함.)
+	// pos: key의 각 자리 숫자를 포인팅하는 변수 (앞에서 뒤로 하나씩 읽기 위함.)
 	// key의 범위가 firstKey에서 lastKey를 벗어나면 검색을 리턴해야 함.
 
 	switch n := (origNode).(type) {
 	case nil:
 		return nil, nil, false, nil
 	case valueNode: // leaf node
+		// fmt.Println("valueNode key is", key)
 		
 		// in this case, should archive the node into the result array
 		if n != nil {
 			Accounts = append(Accounts, n)
-			Keys = append(Keys, common.BytesToHash(key))
+			Keys = append(Keys, common.BytesToHash(key[:pos-1]))
+			fmt.Println("key is ", key)
+			fmt.Println("key is ", key[:pos-1])
+			// delete the leaf node
+			k := common.BytesToHash(key[:pos-1])
+			t.TryUpdate(k[:], nil)
+			fmt.Println("k is ", k[:])
 		}
 
 		return n, n, false, nil
 	case *shortNode:
+		// fmt.Println("shortNode key is", key)
 		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
 			// key not found in trie
 			return nil, n, false, nil
 		}
-		value, newnode, didResolve, err = t.tryGetAll(n.Val, key, firstKey, lastKey, pos+len(n.Key))
+		value, newnode, didResolve, err = t.tryGetAll(n.Val, key, lastKey, pos+len(n.Key))
 		if err == nil && didResolve {
 			n = n.copy()
 			n.Val = newnode
 		}
-		return value, n, didResolve, err
-	case *fullNode: 
-		// 기존에는 해당하는 pos 밑으로만 내려감.
-		// value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1) // --> original code
+		return value, n, didResolve, err 
+	case *fullNode: 	
+		// fmt.Println("fullNode key is", key)
 
-		// fullnode에서 16개의 브랜치를 모두 탐색함.
-		for i := 0; i < 16; i++ {
-			value, newnode, didResolve, err = t.tryGetAll(n.Children[i], key, firstKey, lastKey, pos+1) // --> original code
-			
-			// 탐색 타깃을 변경
-			if key[pos] != 'f' {
-				key[pos] = key[pos] + 1 
-			} else {
-				key[pos] = 0
-			}
+		// (original code) 기존에는 해당하는 pos 밑으로만 내려감.
+		// value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
+
+		// fullnode에서 firstKey 이후의 브랜치를 모두 탐색함.
+		for i := key[pos]; i < 16; i++ {
 
 			// 만약 lastKey를 넘어가면 탐색 종료
-			if bytes.Compare(key, lastKey) == 1 { // key > lastKey
+			if bytes.Compare(key, lastKey) >= 0 { // key > lastKey
 				break;
+			}
+
+			value, newnode, didResolve, err = t.tryGetAll(n.Children[i], key, lastKey, pos+1)
+			
+			// 해당 자릿수에서 탐색 타깃을 변경
+			if key[pos] != 15 {
+				// fmt.Println("key[pos] is ", key[pos])
+				key[pos] = key[pos] + 1 
+			} else {
+				// fmt.Println("key[pos] is ", key[pos])
+				key[pos] = 0
 			}
 		}
 
@@ -246,11 +259,13 @@ func (t *Trie) tryGetAll(origNode node, key, firstKey, lastKey []byte, pos int) 
 		}
 		return value, n, didResolve, err
 	case hashNode:
+		// fmt.Println("hashNode key is", key)
 		child, err := t.resolveHash(n, key[:pos])
 		if err != nil {
-			return nil, n, true, err
+			// return nil, n, true, err
+			return nil, nil, true, err
 		}
-		value, newnode, _, err := t.tryGetAll(child, key, firstKey, lastKey, pos)
+		value, newnode, _, err := t.tryGetAll(child, key, lastKey, pos)
 		return value, newnode, true, err
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
@@ -363,6 +378,7 @@ func (t *Trie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 //
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryUpdate(key, value []byte) error {
+	fmt.Println("TryUpdate to nil") // (joonha)
 	t.unhashed++
 	k := keybytesToHex(key)
 	if len(value) != 0 {
