@@ -1442,6 +1442,7 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 
 		// // delete inactive leaf node --> change to deleting during DFS (joonha)
 		// fmt.Println("delete previous leaf node -> key:", key.Hex())
+		// fmt.Println("delete previous leaf node -> key:", key[:])
 		// if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
 		// 	s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
 		// }
