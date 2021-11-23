@@ -28,6 +28,9 @@ import (
 	"strconv"
 	"sync"
 
+	// (joonha)
+    "math"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -185,33 +188,44 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 // DFS by recursion (joonha)
 func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
 	
-	// should touch from the firstKey to the laskKey
-	// TODO: nil로의 업데이트를 여기서 한번에 수행해도 좋을 듯 (inactivation을 위해 만든 함수이므로)
-
-	// pos: key의 각 자리 숫자를 포인팅하는 변수 (앞에서 뒤로 하나씩 읽기 위함.)
-	// key의 범위가 firstKey에서 lastKey를 벗어나면 검색을 리턴해야 함.
+	// (joonha)
+	/****************************************************************************/ 
+	// What does this tryGetAll function do:
+	// TRAVERSE from the firstKey to the lastKey
+	// SAVE the account info to the Accounts array and the Keys array
+	// and DELETE the account(set nil) in order to inactivate the account
+	//
+	// pos: pointer pointing each digit of the key (related to the trie depth)
+	/****************************************************************************/
 
 	switch n := (origNode).(type) {
 	case nil:
 		return nil, nil, false, nil
-	case valueNode: // leaf node
-		// fmt.Println("valueNode key is", key)
-		
+	case valueNode: // leaf node		
 		// in this case, should archive the node into the result array
 		if n != nil {
+
+			// found non-nil account
 			Accounts = append(Accounts, n)
-			Keys = append(Keys, common.BytesToHash(key[:pos-1]))
-			fmt.Println("key is ", key)
-			fmt.Println("key is ", key[:pos-1])
-			// delete the leaf node
-			k := common.BytesToHash(key[:pos-1])
-			t.TryUpdate(k[:], nil)
-			fmt.Println("k is ", k[:])
+
+			// key of that account
+			k := big.NewInt(0)
+			for i := 0; i < len(key[:pos-1]); i++ {
+				k = k.Add(k, big.NewInt(int64(math.Pow(16, float64(i)) * float64(key[len(key[:pos-1]) - i - 1]))))
+			}
+			hk := common.BigToHash(k)
+			fmt.Println("hk is ", hk)
+			Keys = append(Keys, hk)
+
+			// delete the account
+			t.TryUpdate(hk[:], nil)
+			fmt.Println("k is ", hk[:])
+
+			n = nil
 		}
 
 		return n, n, false, nil
 	case *shortNode:
-		// fmt.Println("shortNode key is", key)
 		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
 			// key not found in trie
 			return nil, n, false, nil
@@ -223,8 +237,6 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 		}
 		return value, n, didResolve, err 
 	case *fullNode: 	
-		// fmt.Println("fullNode key is", key)
-
 		// (original code) 기존에는 해당하는 pos 밑으로만 내려감.
 		// value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
 
@@ -254,11 +266,9 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 		}
 		return value, n, didResolve, err
 	case hashNode:
-		// fmt.Println("hashNode key is", key)
 		child, err := t.resolveHash(n, key[:pos])
 		if err != nil {
-			// return nil, n, true, err
-			return nil, nil, true, err
+			return nil, n, true, err
 		}
 		value, newnode, _, err := t.tryGetAll(child, key, lastKey, pos)
 		return value, newnode, true, err
@@ -365,7 +375,6 @@ func (t *Trie) Update(key, value []byte) {
 //
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryUpdate(key, value []byte) error {
-	fmt.Println("TryUpdate to nil") // (joonha)
 	t.unhashed++
 	k := keybytesToHex(key)
 	if len(value) != 0 {
