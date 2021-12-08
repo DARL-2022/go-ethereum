@@ -88,6 +88,7 @@ type StateDB interface {
 	DeletePreviousLeafNodes([]common.Hash)
 	CreateAccount_restoring(common.Address)
 	Exist_InInactiveTrie(common.Address) bool	
+	TryGet_SetKey_while_restoring(key []byte) ([]byte, error)
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

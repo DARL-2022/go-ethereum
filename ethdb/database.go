@@ -25,7 +25,7 @@ type KeyValueReader interface {
 	Has(key []byte) (bool, error)
 
 	// Get retrieves the given key if it's present in the key-value data store.
-	Get(key []byte) ([]byte, error)
+	Get(key []byte) ([]byte, error) // flag by joonha
 }
 
 // KeyValueWriter wraps the Put method of a backing data store.

@@ -21,6 +21,7 @@ import (
 	"bytes" 
 	// "encoding/binary"
 	// "fmt"
+	// "strconv"
 
 	"errors"
 	"math/big"
@@ -346,10 +347,11 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			ii++
 		}
 
-		inactiveKey := common.AddrToKey_inactive[inactiveAddr][lastIndex]
+		// inactiveKey := common.AddrToKey_inactive[inactiveAddr][lastIndex]
+		inactiveKey := common.NoExistKey
 
 		log.Info("### restoration target", "address", inactiveAddr)
-		log.Info("### restoration target", "key", inactiveKey)
+		// log.Info("### restoration target", "key", inactiveKey)
 
 		cnt++
 
@@ -393,6 +395,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			/***************************************/
 			// get a merkle proof from tx data
 			merkleProof, blockHeader := parseProof(data, int64(checkpointBlock), &cnt, limit)
+			merkleProof_1 := merkleProof // for getKey
 
 			log.Info("### flag 4-2")
 
@@ -401,20 +404,109 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			/***************************************/
 			// VERIFY MERKLE PROOF
 			/***************************************/
-			// if verification fails, return nil right away (joonha)
+			// if verification fails, return nil right away
 			// hint: Has and Get function should be declared in statedb.go
 			log.Info("### merkleProof", "merkleProof", merkleProof)
-			log.Info("inactiveKey", "inactiveKey", inactiveKey)
-			acc, merkleErr := trie.VerifyProof(blockHeader.Root, inactiveKey.Bytes(), &merkleProof)
-			log.Info("### flag 4-3")
+			// log.Info("inactiveKey", "inactiveKey", inactiveKey)
 
+
+				/********************************************/
+				// PREVENT REPLAYING
+				/********************************************/
+				// if the account has already been restored in the epoch, 
+				// do not restore again.
+
+				// getProof로 받아온 merkle proof로부터 복원하려는 키 값을 복원해야 한다.
+				// 그냥 키 값을 건내고 검증 없이 복원하면 보안 문제가 있기 때문이다.
+				// merkleProof 이용.
+				
+				// 또한 블록 헤더에 이 복원한 키 값 리스트를 적어야 하는데,
+				// 전체 리스트를 다 적으면 오버헤드가 너무 크니까
+				// 리스트를 recursive하게 해싱을 하던가,
+				// Transaction Trie에서 처럼 작은 compact Trie를 만들어서 해싱을 하던가
+				// 하면 된다. 방법은 자유.
+
+				// 다 되었으면, 스펙 정리 글과 구현체를 대조해보며 빠진 것이 없는지 확인할 것.
+
+			
+			/********************************************/
+			// GET KEY FROM MERKLE PROOF
+			/********************************************/
+			
+			// retrieve a Key from the merkle proof
+			// (utilize proof.go/GetKeyFromMerkleProof)
+			// edit from the 'getLastKey' function
+			log.Info("flag 000")
+			retrievedKey := trie.GetKeyFromMerkleProof(blockHeader.Root, merkleProof) // return type is *big.Int
+			log.Info("flag 001")
+			log.Info("flag 002")
+			log.Info("retrievedKey", "retrievedKey", retrievedKey) 
+			// log.Info("inactive Key", "inactive Key", inactiveKey)
+			inactiveKey = retrievedKey
+
+			// if bytes.Equal(retrievedKey[:], inactiveKey.Bytes()) {
+			// 	log.Info("Retrieval Success")
+			// 	inactiveKey = retrievedKey
+			// } else {
+			// 	return nil, gas, ErrInvalidProof
+			// }
+			
+		
+			
+			
+			// if the retrieved Key is not equal to the 'inactiveKey' claimed by the requester,
+			// do not proceed and exit with the err msg.
+
+			// (1) 복원한 키 값이 기존에 사용된 리스트에 포함되어 있는지 확인함.
+			// (2) 기존에 사용된 적이 없으면 VerifyProof를 수행함.
+			// (3) 유효한 머클 검증인 경우 '사용된 머클 검증'에 그 키 값을 저장하여 재사용을 방지함.
+			_, merkleErr := trie.VerifyProof_ProofList(blockHeader.Root, inactiveKey.Bytes(), merkleProof_1)
+			
+			// TODO: 루트와 탑노드만 비교하도록 최적화. 현재는 전체에 대해서 VarifyProof를 하고 있음.
+
+			// blockHeader.Root가 merkleProof 맨 윗노드의 해시값과 같은지만 검사하면 끝.
+			// n, merkleErr := trie.VerifyProof_restore(blockHeader.Root, merkleProof_1)
+			// log.Info("jooooooooooooooooooooooonha flag", "flag", flag)
+
+			log.Info("### flag 4-3")
 			if merkleErr != nil {
 				log.Info("### flag 4-4")
-
 				// bad merkle proof. something is wrong
 				log.Info("Restore Error: bad merkle proof")
 				return nil, gas, ErrInvalidProof
+			} else {
+				log.Info("Merkle Proof is valid")
 			}
+			// topNodeHash, _ := merkleProof_1.Get(blockHeader.Root[:])
+			// log.Info("AAAAAAAAAAA: ", "AA", blockHeader.Root[:])
+			// log.Info("BBBBBBBBBBB: ", "BB", topNodeHash) // 이걸 한 번 해시해야 할 듯.
+			// if !bytes.Equal(blockHeader.Root[:], topNodeHash) { // merkle proof is invalid
+			// 	log.Info("Restore Error: bad merkle proof")
+			// 	return nil, gas, ErrInvalidProof
+			// }
+
+
+			// reaching here, it means the merkle proof is valid.
+			// retrievedKey 에 해당하는 account를 복원하면 됨.
+			acc, _ := evm.StateDB.TryGet_SetKey_while_restoring(inactiveKey[:]) // calling a function from secure_trie.go
+			
+
+			/***********************************************/
+			// CHECK DOUBLE SPENDING OF THE INACTIVE KEY
+			/***********************************************/
+			// TODO: 사용된 inactiveKey를 리스트로 저장할 것. (재사용 여부 체크)
+
+
+
+
+			// log.Info("### flag 4-3")
+			// if merkleErr != nil {
+			// 	log.Info("### flag 4-4")
+
+			// 	// bad merkle proof. something is wrong
+			// 	log.Info("Restore Error: bad merkle proof")
+			// 	return nil, gas, ErrInvalidProof
+			// }
 
 			log.Info("### flag 4-5")
 
@@ -641,7 +733,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 }
 
 // parseProof get a merkle proof from tx data (joonha)
-func parseProof(data []interface{}, blockNum int64, cnt *int, limit int) (state.ProofList, *types.Header) {
+func parseProof(data []interface{}, blockNum int64, cnt *int, limit int) (common.ProofList, *types.Header) {
 
 	// Get block header
 	blockHash := rawdb.ReadCanonicalHash(rawdb.GlobalDB, uint64(blockNum))
@@ -650,7 +742,8 @@ func parseProof(data []interface{}, blockNum int64, cnt *int, limit int) (state.
 	log.Info("### flag 101")
 
 	// get Merkle proof
-	merkleProof := make(state.ProofList, 0)
+	// merkleProof := make(state.ProofList, 0)
+	merkleProof := make(common.ProofList, 0)
 
 	log.Info("### flag 102")
 	n := big.NewInt(0)
