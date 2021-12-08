@@ -47,7 +47,8 @@ var (
 )
 
 // type proofList [][]byte // --> original code
-type ProofList [][]byte // for external use
+// type ProofList [][]byte // for external use
+type ProofList common.ProofList
 
 
 func (n *ProofList) Put(key []byte, value []byte) error {
@@ -352,6 +353,10 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 func (s *StateDB) GetProof(addr common.Address) ([][]byte, error) {
 
 	// (joonha)
+	if len(common.AddrToKey_inactive[addr]) <= 0 {
+		return nil, errors.New("No Account to Restore (ethane)")
+	}
+
 	lastIndex := len(common.AddrToKey_inactive[addr]) - 1
 	
 	fmt.Println("lastIndex is ", lastIndex)
@@ -1483,4 +1488,9 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 // GetAccount returns Account from stateObject (joonha)
 func (s *StateDB) GetAccount(addr common.Address) *Account {
 	return &s.getStateObject(addr).data
+}
+
+
+func (s *StateDB) TryGet_SetKey_while_restoring(key []byte) ([]byte, error) {
+	return s.trie.TryGet_SetKey(key)
 }

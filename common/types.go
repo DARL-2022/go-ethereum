@@ -50,6 +50,21 @@ const (
 // 	Map			 map[int64]Hash // (variable ID / Location) mapping variable ID to Location in a storage trie
 // }
 
+// (joonha)
+type ProofList [][]byte
+
+// (joonha)
+func (n *ProofList) Has(key []byte) (bool, error) {
+	panic("not supported")
+}
+
+// (joonha)
+func (n *ProofList) Get(key []byte) ([]byte, error) {
+	x := (*n)[0]
+	*n = (*n)[1:]
+	return x, nil
+}
+
 var (
 	// for restoring (joonha)
 	Flag = int64(0) 

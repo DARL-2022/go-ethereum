@@ -31,7 +31,7 @@ import (
 	"math/big"
 
 	// (joonha)
-    "math"
+	"math"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -133,7 +133,7 @@ func (t *Trie) Get(key []byte) []byte {
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryGet(key []byte) ([]byte, error) {
-	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0) // 마지막 파라미터로 position을 넘겨주고 있음. 이를 이용하면 좋을 듯. (joonha)
+	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
 	if err == nil && didResolve {
 		t.root = newroot
 	}
@@ -195,7 +195,7 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 	
 	// (joonha)
 	/****************************************************************************/ 
-	// What does this tryGetAll function do:
+	// tryGetAll function does:
 	// TRAVERSE from the firstKey to the lastKey
 	// SAVE the account info to the Accounts array and the Keys array
 	// and DELETE the account(set nil) in order to inactivate the account
