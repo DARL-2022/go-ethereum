@@ -403,7 +403,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// (utilize proof.go/GetKeyFromMerkleProof)
 			// edit from the 'getLastKey' function
 			log.Info("flag 000")
-			retrievedKey := trie.GetKeyFromMerkleProof(blockHeader.Root, merkleProof) // return type is *big.Int
+			targetAccount, retrievedKey := trie.GetKeyFromMerkleProof(blockHeader.Root, merkleProof) // return type is *big.Int
+			// _, retrievedKey := trie.GetKeyFromMerkleProof(blockHeader.Root, merkleProof) // return type is *big.Int
 			log.Info("flag 001")
 			log.Info("flag 002")
 			log.Info("retrievedKey", "retrievedKey", retrievedKey) 
@@ -454,29 +455,30 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 			// reaching here, it means the merkle proof is valid.
 			// retrievedKey 에 해당하는 account를 복원하면 됨.
-			acc, _ := evm.StateDB.TryGet_SetKey_while_restoring(inactiveKey[:]) // calling a function from secure_trie.go
+			// TODO: TryGet을 사용하지 않고 merkle Proof 로부터 valueNode를 생성해서
+			// 그것을 account로 두고 restore 해야 함.
 			
+			// acc, _ := evm.StateDB.TryGet_SetKey_while_restoring(inactiveKey[:]) // calling a function from secure_trie.go
+			acc := targetAccount
 
 			/***********************************************/
 			// CHECK DOUBLE SPENDING OF THE INACTIVE KEY
 			/***********************************************/
-			// TODO: 사용된 inactiveKey를 리스트로 저장할 것. (재사용 여부 체크)
+			// account: acc / key: inactiveKey
+			// TODO: 사용된 inactiveKey를 맵으로 저장할 것. (재사용 여부 체크)
 
 
 
 
-			// log.Info("### flag 4-3")
-			// if merkleErr != nil {
-			// 	log.Info("### flag 4-4")
 
-			// 	// bad merkle proof. something is wrong
-			// 	log.Info("Restore Error: bad merkle proof")
-			// 	return nil, gas, ErrInvalidProof
-			// }
+
+			
+
 
 			log.Info("### flag 4-5")
 
 			if acc == nil {
+			// if acc == common.ZeroAddress {
 				log.Info("### flag 4-6")
 
 				log.Info("No account in the merkle proof")
@@ -496,6 +498,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 				log.Info("### flag 4-9")
 
 				accounts = append(accounts, curAcc)
+				accounts = append(accounts, curAcc) // TODO: cachedState를 확인하지 않는다면, 두 번 append 해야 함. 나중에 수정할 것.
+
 				log.Info("### flag 4-10")
 
 			}
@@ -519,27 +523,34 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		// deal with the checkpointBlock's account state
 		log.Info("### account num", "len(accounts)", len(accounts))
-		isExist := cachedState.Exist_InInactiveTrie(inactiveAddr)
+		//=========================================================================================
+		// // 현재 state에서 inactiveTrie 내에 존재하는지 확인.
+		// 이렇게 두 번 체크하고, 두 번째까지 잘 완료되어야 restore 하는 것인가?
+		// 가 아니라 애초에 머클검증으로 account를 가져오기 때문에
+		// trie나 cachedState에 이게 존재하는지 다시 확인할 필요가 없다.
 
-		// inactive 영역에도 있고 active 영역에도 있으면, GetAccount는 무엇을 받아올까? 
-		// 이 부분을 명확히 해 주어야 할 듯.
-		// -> statedb.go의 getDeletedStateObject에서 restore의 경우에
-		// AddrToKey_inactive로부터 TryGet 하도록 변경하여 해결함.
+		// isExist := cachedState.Exist_InInactiveTrie(inactiveAddr)
 
-		if isExist {
-			log.Info("### flag 5")
-			// there is the account
-			curAcc = cachedState.GetAccount(inactiveAddr)
-			log.Info("### curACC", "curACC", curAcc)
-			accounts = append(accounts, curAcc)
-		} else {
-			log.Info("### flag 6: NO ACCOUNT is found in the trie")
-			// there is no account
-			accounts = append(accounts, nil)
+		// // inactive 영역에도 있고 active 영역에도 있으면, GetAccount는 무엇을 받아올까? 
+		// // 이 부분을 명확히 해 주어야 할 듯.
+		// // -> statedb.go의 getDeletedStateObject에서 restore의 경우에
+		// // AddrToKey_inactive로부터 TryGet 하도록 변경하여 해결함.
 
-			log.Info("Restore Error: no accounts to restore")
-			return nil, gas, ErrInvalidProof // TODO: this error msg should be altered. (joonha)
-		}
+		// if isExist {
+		// 	log.Info("### flag 5")
+		// 	// there is the account
+		// 	curAcc = cachedState.GetAccount(inactiveAddr)
+		// 	log.Info("### curACC", "curACC", curAcc)
+		// 	accounts = append(accounts, curAcc)
+		// } else {
+		// 	log.Info("### flag 6: NO ACCOUNT is found in the trie")
+		// 	// there is no account
+		// 	accounts = append(accounts, nil)
+
+		// 	log.Info("Restore Error: no accounts to restore")
+		// 	return nil, gas, ErrInvalidProof // TODO: this error msg should be altered. (joonha)
+		// }
+		//=========================================================================================
 
 		// Reaching here, 'accounts' contains a list of accounts to be restored
 		// in the state trie.
@@ -598,7 +609,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 			common.Restoring = 1
 			log.Info("activeBalance", "activeBalance", activeBalance)
-			log.Info("restoring Balance", "restoring Balance", accounts[1].Balance)
+			log.Info("restoring Balance", "restoring Balance", accounts[1].Balance) // TODO(joonha): account append 를 한 번으로 줄이고, 인덱스를 0으로 접근할 것.
 			log.Info("### flag 15")
 			resAcc.Balance.Add(activeBalance, accounts[1].Balance)
 			log.Info("### flag 16")
@@ -630,7 +641,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			if len(common.AddrToKey_inactive[inactiveAddr]) > 0 {
 				common.AddrToKey_inactive[inactiveAddr] = common.AddrToKey_inactive[inactiveAddr][:len(common.AddrToKey_inactive[inactiveAddr])-1]
 			}
-			// 만약 그 리스트가 empty면 그 리스트를 지움.
+			// 만약 그 리스트가 empty면 그 리스트를 지움. TODO
 			// _, ok := common.AddrToKey_inactive[inactiveAddr];
 			// if !ok { // empty map
 			// 	delete(common.AddrToKey_inactive, inactiveAddr);
