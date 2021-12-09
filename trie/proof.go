@@ -172,6 +172,8 @@ func VerifyProof_ProofList(rootHash common.Hash, key []byte, proofDb common.Proo
 		}
 		// get returns the child's key of the node n (joonha)
 		keyrest, cld := get(n, key, true)
+		fmt.Println("^!^!^!^!^!^!^!^!^!^!^!^ key is ", key)
+		fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$ key[:] is ", key[:])
 		switch cld := cld.(type) {
 		case nil:
 			// The trie doesn't contain the key.
@@ -201,21 +203,21 @@ func VerifyProof_restore(rootHash common.Hash, proofDb common.ProofList) (value 
 
 
 // (joonha)
-func GetKeyFromMerkleProof(rootHash common.Hash, proofDb common.ProofList) common.Hash {
+func GetKeyFromMerkleProof(rootHash common.Hash, proofDb common.ProofList) ([]byte, common.Hash) {
 	
 	// start iteration from the root node
 	// tKey := getKeyFromMerkleProof(rootHash, root, nil, proofDb)
-	tKey := getKeyFromMerkleProof(rootHash, nil, nil, proofDb)
+	targetNode, tKey := getKeyFromMerkleProof(rootHash, nil, nil, proofDb)
 
 	// convert to a key format (hash)
 	tKey_i := tKey.Int64() // big.Int -> int64
 	retrievedKey := common.HexToHash(strconv.FormatInt(tKey_i, 16)) // int64 -> hex -> hash
 
-	return retrievedKey
+	return targetNode, retrievedKey
 }
 
 // (joonha)
-func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, proofDb common.ProofList) *big.Int {
+func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, proofDb common.ProofList) ([]byte, *big.Int) {
 
 	fmt.Println("\n=============================================================================")
 	fmt.Println("=============================================================================\n")
@@ -229,6 +231,8 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 	// tKey: target Key that may be complete reaching a value node
 	// proofDb: merkle proof stream
 	// At first, origNode is nil.
+	//
+	// Last shortNode's child is a valueNode, the target account we want to retrieve.
 
 
 	/*************************************************************/
@@ -255,8 +259,15 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 	
 	fmt.Println("proofDb: ", proofDb)
 
-	if len(proofDb) == 0 {
-		fmt.Println("proofDb is nil")
+	if len(proofDb) == 0 { // Reaching the valueNode, return.
+		fmt.Println("proofDb is nil") 
+
+		// TODO: origNode 가 shortNode 일 것인데, 
+		// 이것의 child 가 valueNode 니까 
+		// 이걸로 restore 하면 됨.
+		// 그 valueNode 자체를 리턴하면 됨. (리턴 밸류 추가)
+		// 그런데 shortNode의 child는 shortNode 자체임(copy의 결과)
+		// 그러면 origNode를 그냥 리턴하면 될 것 같음....?
 
 		hexToInt := new(big.Int)
 		
@@ -271,7 +282,38 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 		fmt.Println("hexToInt: ", hexToInt)
 		fmt.Println("case value-2")
 		
-		return hexToInt
+		// get valueNode
+		tKey_i := hexToInt.Int64() // big.Int -> int64
+		key := common.HexToHash(strconv.FormatInt(tKey_i, 16)) // int64 -> hex -> hash
+		fmt.Println("key is ", key)
+		fmt.Println("key[:] is ", key[:])
+		for i := 0; ; i++ {
+			// keyrest, cld := get(origNode, key[:], true)
+			keyrest, cld := get(origNode, tKey[len(tKey)-1:], true)
+			fmt.Println("Happy tKey is ", tKey[len(tKey)-1:])
+			fmt.Println("Happy tKey[:] is ", tKey[len(tKey)-1:])
+			switch cld := cld.(type) {
+			case nil:
+				// The trie doesn't contain the key.
+				fmt.Println("NIL NIL NIL NIL NIL NIL")
+				return nil, hexToInt
+			case hashNode:
+				key = common.BytesToHash(keyrest)
+				copy(nodeHash[:], cld)
+				fmt.Println("hashNode")
+			case valueNode:
+				fmt.Println("valueNode")
+				// return cld, nil
+				return cld, hexToInt
+			default:
+				fmt.Println("default")
+			}
+		}
+
+		fmt.Println("Bye Bye 1")
+		// return common.BytesToAddress(origNode.(hashNode)), hexToInt // returning the targetNode too
+		// return hexToInt
+		return nil, hexToInt
 
 	} else {
 		fmt.Println("proofDb is not nil")
@@ -280,7 +322,8 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 	currNode, err := resolveNode(nodeHash)
 	if err != nil {
 		fmt.Errorf("bad proof node: %v", err)
-		return nil
+		return nil, nil
+		// return nil
 	} 
 
 
@@ -301,8 +344,6 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 			nn := hasher.fullnodeToHash(cur, false)
 			fmt.Println("selected branch: ", nn)
 
-			// TODO: nn과 동일한 origNode의 child가 있다면, (둘 다 타입은 node로 동일함)
-			// 그것의 index를 tKey에 append 하면 완성임.
 			i := 0
 			for i < 16 {
 				if common.BytesToHash(nn.(hashNode)) == common.BytesToHash((n.Children[i]).(hashNode)) {
@@ -318,7 +359,7 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 			hasher := newHasher(false)
 			defer returnHasherToPool(hasher)
 
-			collapsed, _ := hasher.hashShortNodeChildren(cur) // should hash the child(value node) first
+			collapsed, _ := hasher.hashShortNodeChildren(cur) // should hash the child valueNode first
 			nn := hasher.shortnodeToHash(collapsed, false) // nn: hashnode
 			fmt.Println("selected branch: ", nn)
 
@@ -346,7 +387,8 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 	switch n := (currNode).(type) { // no valueNode and hashNode
 	case nil:
 		fmt.Println("curr nil")
-		return big.NewInt(0)
+		// return big.NewInt(0)
+		return nil, big.NewInt(0)
 
 	case *shortNode: // should update the key.
 		fmt.Println("curr short")
@@ -821,7 +863,9 @@ func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 	for {
 		switch n := tn.(type) {
 		case *shortNode:
+			fmt.Println("nnnnnnnnnnnnnnnn shortnode")
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
+				fmt.Println("nnnnnnnnnnnnnnnn shortnode returning nil, nil")
 				return nil, nil
 			}
 			tn = n.Val
@@ -830,18 +874,23 @@ func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 				return key, tn
 			}
 		case *fullNode:
+			fmt.Println("nnnnnnnnnnnnnnnn fullnode")
 			tn = n.Children[key[0]]
 			key = key[1:]
 			if !skipResolved {
 				return key, tn
 			}
 		case hashNode:
+			fmt.Println("nnnnnnnnnnnnnnnn hashnode")
 			return key, n
 		case nil:
+			fmt.Println("nnnnnnnnnnnnnnnn nil")
 			return key, nil
 		case valueNode:
+			fmt.Println("nnnnnnnnnnnnnnnn valuenode")
 			return nil, n
 		default:
+			fmt.Println("nnnnnnnnnnnnnnnn default")
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
