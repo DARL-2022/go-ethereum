@@ -25,7 +25,7 @@ fullnode = Web3(Web3.HTTPProvider("http://localhost:" + FULL_PORT))
 def main():
 
     # addr to restore
-    restoreAddr = "0x0000000000000000000000000000000000000002"
+    restoreAddr = "0x0000000000000000000000000000000000000001"
     print("joonha flag 0")
 
     # unlock coinbase
@@ -99,35 +99,35 @@ def sendTransaction(to, delegatedFrom):
     ######################### below is for common.AlredyRestored check ###############################
     ##################################################################################################
 
-    fullnode.geth.miner.start(1)  # start mining
-    # while (fullnode.eth.blockNumber == currentBlock):
-    #     pass # just wait for mining
-    fullnode.geth.miner.stop()  # stop mining
+    # fullnode.geth.miner.start(1)  # start mining
+    # # while (fullnode.eth.blockNumber == currentBlock):
+    # #     pass # just wait for mining
+    # fullnode.geth.miner.stop()  # stop mining
 
-    # wait for the last block to be mined
-    # fullnode.geth.miner.stop()
-    print("\n")
-    print(datetime.now())
-    print("Block Mining Complete")
+    # # wait for the last block to be mined
+    # # fullnode.geth.miner.stop()
+    # print("\n")
+    # print(datetime.now())
+    # print("Block Mining Complete")
 
-    while True:
-        try:
-            fullnode.eth.sendTransaction(
-                {'to': to, 'from': fullnode.eth.coinbase, 'value': '0', 'data': delegatedFrom, 'gas': '21000'})
-            break
-        except:
-            continue
+    # while True:
+    #     try:
+    #         fullnode.eth.sendTransaction(
+    #             {'to': to, 'from': fullnode.eth.coinbase, 'value': '0', 'data': delegatedFrom, 'gas': '21000'})
+    #         break
+    #     except:
+    #         continue
 
-    fullnode.geth.miner.start(1)  # start mining
-    # while (fullnode.eth.blockNumber == currentBlock):
-    #     pass # just wait for mining
-    fullnode.geth.miner.stop()  # stop mining
+    # fullnode.geth.miner.start(1)  # start mining
+    # # while (fullnode.eth.blockNumber == currentBlock):
+    # #     pass # just wait for mining
+    # fullnode.geth.miner.stop()  # stop mining
 
-    # wait for the last block to be mined
-    # fullnode.geth.miner.stop()
-    print("\n")
-    print(datetime.now())
-    print("Block Mining Complete")
+    # # wait for the last block to be mined
+    # # fullnode.geth.miner.stop()
+    # print("\n")
+    # print(datetime.now())
+    # print("Block Mining Complete")
 
     ######################################## fin #####################################################
 
