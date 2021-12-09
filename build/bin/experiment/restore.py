@@ -25,7 +25,7 @@ fullnode = Web3(Web3.HTTPProvider("http://localhost:" + FULL_PORT))
 def main():
 
     # addr to restore
-    restoreAddr = "0x0000000000000000000000000000000000000001"
+    restoreAddr = "0x0000000000000000000000000000000000000002"
     print("joonha flag 0")
 
     # unlock coinbase
@@ -53,6 +53,36 @@ def main():
     print(datetime.now())
     print("Block Mining Complete")
 
+    ##################################################################################################
+    ######################### below is for common.AlredyRestored check ###############################
+    ##################################################################################################
+    # # if below is executed, an err occurs from the Archive node
+    # # because the archive node cannot find a key from the AddrToKey_inactive (when the length is 0)
+
+    # currentBlock = fullnode.eth.blockNumber
+
+    # # send restore tx
+    # print("currentBlock: ", currentBlock)
+    # # print("restore target block:", fullnode.eth.blockNumber)
+    # sendRestoreTx(fullnode.eth.blockNumber, restoreAddr)
+    # print("restore tx -> target:", restoreAddr)
+
+    # # start mining
+    # # fullnode.geth.miner.start(1)
+
+    # fullnode.geth.miner.start(1)  # start mining
+    # while (fullnode.eth.blockNumber == currentBlock):
+    #     pass # just wait for mining
+    # fullnode.geth.miner.stop()  # stop mining
+
+    # # wait for the last block to be mined
+    # # fullnode.geth.miner.stop()
+    # print("\n")
+    # print(datetime.now())
+    # print("Block Mining Complete")
+
+    ######################################## fin #####################################################
+
 
 
 def sendTransaction(to, delegatedFrom):
@@ -64,6 +94,43 @@ def sendTransaction(to, delegatedFrom):
             break
         except:
             continue
+
+    ##################################################################################################
+    ######################### below is for common.AlredyRestored check ###############################
+    ##################################################################################################
+
+    fullnode.geth.miner.start(1)  # start mining
+    # while (fullnode.eth.blockNumber == currentBlock):
+    #     pass # just wait for mining
+    fullnode.geth.miner.stop()  # stop mining
+
+    # wait for the last block to be mined
+    # fullnode.geth.miner.stop()
+    print("\n")
+    print(datetime.now())
+    print("Block Mining Complete")
+
+    while True:
+        try:
+            fullnode.eth.sendTransaction(
+                {'to': to, 'from': fullnode.eth.coinbase, 'value': '0', 'data': delegatedFrom, 'gas': '21000'})
+            break
+        except:
+            continue
+
+    fullnode.geth.miner.start(1)  # start mining
+    # while (fullnode.eth.blockNumber == currentBlock):
+    #     pass # just wait for mining
+    fullnode.geth.miner.stop()  # stop mining
+
+    # wait for the last block to be mined
+    # fullnode.geth.miner.stop()
+    print("\n")
+    print(datetime.now())
+    print("Block Mining Complete")
+
+    ######################################## fin #####################################################
+
 
 
 def sendRestoreTx(currentBlock, address):

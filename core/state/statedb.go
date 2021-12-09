@@ -352,6 +352,31 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 // GetProof returns the Merkle proof for a given account.
 func (s *StateDB) GetProof(addr common.Address) ([][]byte, error) {
 
+	// 현재는 머클검증을 AddrToKey_inactive에서 받은 key로 만든다. 
+	// 검증 생성자는 어차피 addrToKey_inactive로부터 key를 얻어서 검증 경로를 만들어야 하니까
+	// 이는 더 이상 수정이 필요 없다.
+
+	// 여기서 length를 검사하는 것은 AlreadyRestored를 검사하는 것과 다르다.
+	// 그걸 시뮬레이션 해보려고 한다면,
+	// 우선 아카이브 노드는 인풋으로 들어온 addr에 대해 inactiveKey를 알아서 알고 그 머클검증을 보내준다.
+	// 라이트 노드를 생각해보자. 
+	// 라이트 노드에서는 누군가가 보내온 머클검증으로부터 key를 만들어서 
+	// 그 키의 재사용 여부를 확인하는 것이다.
+	// 그렇다면 이를 잘 거르는지를 확인하려면,
+	// 이미 사용된 머클검증을 재사용하고, 이를 거를 수 있는지를 보면 된다.
+	// 그러면... 새 input을 보내는 부분에서 재사용을 하면 된다.
+	// 이를 위해 restore.py 에서 sendRestoreTx를 두 번 수행하겠다. (될까?) 안되네.
+	// 아 혹은 sendRestoreTx 내에서 sendTransaction을 수행하는데, 이걸 두 번 해보자. 이것도 아니고, 
+	// 블록 채굴을 2회 시행해보자.
+	// 이러면 성공적으로 1회 restore과 1회 오류 발생이 되는데,
+	// 문제는 이 오류가 아카이브 노드가 자체적으로 내뿜는 오류라는 점.
+	// 그럼 악의적인 클라이언트가 머클검증을 재사용하는 것은 어떻게 검사해야 할까?
+	// 라이트 클라이언트 단에서 검사하면 됨.
+	// restore.py에서 proofs를 재사용하면 되는 건데, 
+	// sendTransaction 내에서 두 번 보내보겠음. 
+	// 일단 현재 방법으로 두 번의 restore 시행 중 한 번만 시행이 됨을 확인함.
+	// 그런데 이게 짧은 블록 채굴 간격(@restore.py) 때문에 그런 것인지 다시 볼 필요가 있음.
+
 	// (joonha)
 	if len(common.AddrToKey_inactive[addr]) <= 0 {
 		return nil, errors.New("No Account to Restore (ethane)")

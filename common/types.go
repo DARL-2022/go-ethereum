@@ -71,6 +71,9 @@ var (
 	Restoring = int64(0)
 	PrevAmount = make(map[Address]*big.Int)
 	RestoringByCreation = int64(0)
+	// map with no value only key (for storage optimization, use empty struct as a value)
+	// https://stackoverflow.com/questions/57620170/can-you-have-a-map-with-no-value-in-go/57620378
+	AlreadyRestored = make(map[Hash]struct{})
 
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
