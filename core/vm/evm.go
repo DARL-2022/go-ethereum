@@ -19,9 +19,6 @@ package vm
 import (
 	// (joonha)
 	"bytes" 
-	// "encoding/binary"
-	// "fmt"
-	// "strconv"
 
 	"errors"
 	"math/big"
@@ -270,6 +267,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	if addr == common.HexToAddress("0x0123456789012345678901234567890123456789") { // restoration
 
+		// 이런 식의 상태 코드는 허술함. 보완 필요가 있음. (joonha)
 		common.Restoring = 1 // restoration starts
 		common.RestoringByCreation = 0 
 
@@ -307,7 +305,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		//         그리고 가장 우측(가장 최근) account를 restore 한다.
 		//         즉 addrToKey_inactivate 중 가장 최근 key를 참조하면 된다.
 		//         이걸 여기서 하면 됨.
-		//         즉 account 목록이 아니라 하나만 두면 됨!
+		//         즉 account 목록이 아니라 하나만 두면 됨.
 		//         그런데 account 목록에 하나만 있는 것은 문제가 되지 않으니까 리스트는 그대로 두겠음.
 		//
 		// 2. restore 후 inactive trie에서 account를 nil로 변경해줘야 함.
@@ -347,27 +345,16 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			ii++
 		}
 
-		// inactiveKey := common.AddrToKey_inactive[inactiveAddr][lastIndex]
 		inactiveKey := common.NoExistKey
 
-		log.Info("### restoration target", "address", inactiveAddr)
-		// log.Info("### restoration target", "key", inactiveKey)
-
-		cnt++
 
 		// blockNum은 restore.py에서 지정한 checkpointBlock의 number를 받는다. 
 
 		// get block number to start restoration
-		cnt++
-		
 		blockNum := big.NewInt(0)
-		log.Info("### flag 1")
 		blockNum.SetBytes(data[1].([]byte))
-		log.Info("### flag 2")
-		log.Info("### block num", "blocknum", blockNum.Int64())
-		log.Info("### flag 3")
+		log.Info("### flag 1: block num", "blocknum", blockNum.Int64())
 		checkpointBlock := blockNum.Uint64() // TODO: blockNum -> checkpointBlock을 간소화 할 것. (joonha)
-		log.Info("### flag 4")
 		log.Info("### Checkpoint Block", "checkpointBlock", checkpointBlock)
 
 
@@ -381,14 +368,13 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		resAcc.Balance = big.NewInt(0)
 		var accounts []*state.Account
 
-		cnt++ // TODO: 흩어져 있는 cnt++ 을 합치기 (joonha)
-
-		log.Info("### flag 4-0", "cnt", cnt, "limit", limit)
+		cnt++
+		cnt++
+		cnt++ // TODO(joonha): 흩어져 있는 cnt++ 을 합치기
 
 		for cnt < limit {
 
-			log.Info("### flag 4-0", "cnt", cnt, "limit", limit)
-			log.Info("### flag 4-1: cnt < limit")
+			log.Info("### flag 4-0: cnt < limit", "cnt", cnt, "limit", limit)
 
 			/***************************************/
 			// GET MERKLE PROOF
@@ -396,68 +382,42 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// get a merkle proof from tx data
 			merkleProof, blockHeader := parseProof(data, int64(checkpointBlock), &cnt, limit)
 			merkleProof_1 := merkleProof // for getKey
-
-			log.Info("### flag 4-2")
-
-
-
-			/***************************************/
-			// VERIFY MERKLE PROOF
-			/***************************************/
-			// if verification fails, return nil right away
-			// hint: Has and Get function should be declared in statedb.go
 			log.Info("### merkleProof", "merkleProof", merkleProof)
-			// log.Info("inactiveKey", "inactiveKey", inactiveKey)
 
 
-				/********************************************/
-				// PREVENT REPLAYING
-				/********************************************/
-				// if the account has already been restored in the epoch, 
-				// do not restore again.
-
-				// getProof로 받아온 merkle proof로부터 복원하려는 키 값을 복원해야 한다.
-				// 그냥 키 값을 건내고 검증 없이 복원하면 보안 문제가 있기 때문이다.
-				// merkleProof 이용.
-				
-				// 또한 블록 헤더에 이 복원한 키 값 리스트를 적어야 하는데,
-				// 전체 리스트를 다 적으면 오버헤드가 너무 크니까
-				// 리스트를 recursive하게 해싱을 하던가,
-				// Transaction Trie에서 처럼 작은 compact Trie를 만들어서 해싱을 하던가
-				// 하면 된다. 방법은 자유.
-
-				// 다 되었으면, 스펙 정리 글과 구현체를 대조해보며 빠진 것이 없는지 확인할 것.
-
+			/********************************************/
+			// PREVENT REPLAYING
+			/********************************************/
+			// if the account has already been restored in the epoch, 
+			// do not restore again.
+			//
+			// getProof로 받아온 merkle proof로부터 복원하려는 키 값을 복원해야 한다.
+			// 그냥 키 값을 건내고 검증 없이 복원하면 보안 문제가 있기 때문이다.
+			// merkleProof 이용.
+			//
+			// 또한 블록 헤더에 이 복원한 키 값 리스트를 적어야 하는데,
+			// 전체 리스트를 다 적으면 오버헤드가 너무 크니까
+			// 리스트를 recursive하게 해싱을 하던가,
+			// Transaction Trie에서 처럼 작은 compact Trie를 만들어서 해싱을 하던가
+			// 하면 됨.
 			
 			/********************************************/
 			// GET KEY FROM MERKLE PROOF
 			/********************************************/
-			
 			// retrieve a Key from the merkle proof
-			// (utilize proof.go/GetKeyFromMerkleProof)
-			// edit from the 'getLastKey' function
-			log.Info("flag 000")
+			// (proof.go/GetKeyFromMerkleProof)
 			targetAccount, retrievedKey := trie.GetKeyFromMerkleProof(blockHeader.Root, merkleProof) // return type is *big.Int
-			// _, retrievedKey := trie.GetKeyFromMerkleProof(blockHeader.Root, merkleProof) // return type is *big.Int
-			log.Info("flag 001")
-			log.Info("flag 002")
 			log.Info("retrievedKey", "retrievedKey", retrievedKey) 
-			// log.Info("inactive Key", "inactive Key", inactiveKey)
 			inactiveKey = retrievedKey
+			acc := targetAccount
+			
 
-			// if bytes.Equal(retrievedKey[:], inactiveKey.Bytes()) {
-			// 	log.Info("Retrieval Success")
-			// 	inactiveKey = retrievedKey
-			// } else {
-			// 	return nil, gas, ErrInvalidProof
-			// }
-			
-		
-			
-			
+			/***************************************/
+			// VERIFY MERKLE PROOF
+			/***************************************/
 			// if the retrieved Key is not equal to the 'inactiveKey' claimed by the requester,
 			// do not proceed and exit with the err msg.
-
+			//
 			// (1) 복원한 키 값이 기존에 사용된 리스트에 포함되어 있는지 확인함.
 			// (2) 기존에 사용된 적이 없으면 VerifyProof를 수행함.
 			// (3) 유효한 머클 검증인 경우 '사용된 머클 검증'에 그 키 값을 저장하여 재사용을 방지함.
@@ -465,55 +425,31 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			
 			// TODO: 루트와 탑노드만 비교하도록 최적화. 현재는 전체에 대해서 VarifyProof를 하고 있음.
 
-			// blockHeader.Root가 merkleProof 맨 윗노드의 해시값과 같은지만 검사하면 끝.
+			// blockHeader.Root가 merkleProof 맨 윗노드의 해시값과 같은지만 검사하면 됨.
 			// n, merkleErr := trie.VerifyProof_restore(blockHeader.Root, merkleProof_1)
-			// log.Info("jooooooooooooooooooooooonha flag", "flag", flag)
 
-			log.Info("### flag 4-3")
 			if merkleErr != nil {
-				log.Info("### flag 4-4")
 				// bad merkle proof. something is wrong
 				log.Info("Restore Error: bad merkle proof")
 				return nil, gas, ErrInvalidProof
 			} else {
 				log.Info("Merkle Proof is valid")
 			}
-			// topNodeHash, _ := merkleProof_1.Get(blockHeader.Root[:])
-			// log.Info("AAAAAAAAAAA: ", "AA", blockHeader.Root[:])
-			// log.Info("BBBBBBBBBBB: ", "BB", topNodeHash) // 이걸 한 번 해시해야 할 듯.
-			// if !bytes.Equal(blockHeader.Root[:], topNodeHash) { // merkle proof is invalid
-			// 	log.Info("Restore Error: bad merkle proof")
-			// 	return nil, gas, ErrInvalidProof
-			// }
 
 
-			// reaching here, it means the merkle proof is valid.
-			// retrievedKey 에 해당하는 account를 복원하면 됨.
-			// TODO: TryGet을 사용하지 않고 merkle Proof 로부터 valueNode를 생성해서
-			// 그것을 account로 두고 restore 해야 함.
-			
-			// acc, _ := evm.StateDB.TryGet_SetKey_while_restoring(inactiveKey[:]) // calling a function from secure_trie.go
-			acc := targetAccount
+
+
+			// Reaching here, it means the proof is valid.
+
+
 
 			/***********************************************/
 			// CHECK DOUBLE SPENDING OF THE INACTIVE KEY
 			/***********************************************/
-			// account: acc / key: inactiveKey
-			// TODO: 사용된 inactiveKey를 맵으로 저장할 것. (재사용 여부 체크)
-			// log.Info("AlreadyRestored value", "AlreadyRestored value", common.AlreadyRestored[inactiveKey])
-
 			// ref for mapping empty struct
 			// https://stackoverflow.com/questions/30213739/detecting-if-struct-exists-for-key-in-map
-			// if _, doExist := common.AlreadyRestored[inactiveKey]; !doExist { // inactiveKey is not in the map
 			v, _ := common.AlreadyRestored[inactiveKey]
 			if &v != nil { // first time to be restored
-			// _, found := common.AlreadyRestored[inactiveKey]
-			// var _, ok = common.AlreadyRestored[inactiveKey]
-			// log.Info("found", "found", found)
-			// 버그(?) 발견
-			// if문의 found를 false 체크하면 found는 true로 셋됨.
-			// if문의 found를 true 체크하면 found는 false로 셋됨.
-			// if ok == false { // both true and false, this jumps to 'else'
 				log.Info("NEW NEW NEW")
 				// declaring a empty variable
 				// https://stackoverflow.com/questions/52231115/creating-map-with-empty-values
@@ -523,86 +459,22 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 				return nil, gas, ErrInvalidProof // TODO: alter the err msg
 			}
 
-			// Q. 이 리스트가 reset 될 필요가 있나? 영원히 append? -> 우선은 그럴 듯.
 			
 
-
-			log.Info("### flag 4-5")
-
-			if acc == nil {
-			// if acc == common.ZeroAddress {
-				log.Info("### flag 4-6")
-
-				log.Info("No account in the merkle proof")
-
-				// there is no account
+			/***********************************************/
+			// ACCOUNT IS READY TO BE USED
+			/***********************************************/
+			if acc == nil { // there is no account
+				log.Info("### flag 4-6 No account in the merkle proof")
 				accounts = append(accounts, nil)
-			} else {
-				log.Info("There is the account in the merkle proof")
-
-				log.Info("### flag 4-7")
-
-				// there is the account
+			} else { // there is the account
+				log.Info("### flag 4-7 There is the account in the merkle proof")
 				curAcc = &state.Account{}
-				log.Info("### flag 4-8")
-
 				rlp.DecodeBytes(acc, &curAcc)
-				log.Info("### flag 4-9")
-
 				accounts = append(accounts, curAcc)
-				accounts = append(accounts, curAcc) // TODO: cachedState를 확인하지 않는다면, 두 번 append 해야 함. 나중에 수정할 것.
-
-				log.Info("### flag 4-10")
-
 			}
 		}
 
-		// Reaching here, it means the proof is valid.
-
-		// get target account at the checkpointBlock
-		log.Info("### flag 4-11")
-
-		blockHash := rawdb.ReadCanonicalHash(rawdb.GlobalDB, checkpointBlock)
-		blockHeader := rawdb.ReadHeader(rawdb.GlobalDB, blockHash, checkpointBlock)
-		
-		log.Info("### blockHash", "blockHash", blockHash)
-		log.Info("### blockHeader", "blockHeader", blockHeader)
-
-		// hint: Database() should be declared in vm/interface.go
-		cachedState, _ := state.New(blockHeader.Root, evm.StateDB.Database(), nil) // snapshot -> nil
-
-		log.Info("### cachedState", "cachedState", cachedState)
-
-		// deal with the checkpointBlock's account state
-		log.Info("### account num", "len(accounts)", len(accounts))
-		//=========================================================================================
-		// // 현재 state에서 inactiveTrie 내에 존재하는지 확인.
-		// 이렇게 두 번 체크하고, 두 번째까지 잘 완료되어야 restore 하는 것인가?
-		// 가 아니라 애초에 머클검증으로 account를 가져오기 때문에
-		// trie나 cachedState에 이게 존재하는지 다시 확인할 필요가 없다.
-
-		// isExist := cachedState.Exist_InInactiveTrie(inactiveAddr)
-
-		// // inactive 영역에도 있고 active 영역에도 있으면, GetAccount는 무엇을 받아올까? 
-		// // 이 부분을 명확히 해 주어야 할 듯.
-		// // -> statedb.go의 getDeletedStateObject에서 restore의 경우에
-		// // AddrToKey_inactive로부터 TryGet 하도록 변경하여 해결함.
-
-		// if isExist {
-		// 	log.Info("### flag 5")
-		// 	// there is the account
-		// 	curAcc = cachedState.GetAccount(inactiveAddr)
-		// 	log.Info("### curACC", "curACC", curAcc)
-		// 	accounts = append(accounts, curAcc)
-		// } else {
-		// 	log.Info("### flag 6: NO ACCOUNT is found in the trie")
-		// 	// there is no account
-		// 	accounts = append(accounts, nil)
-
-		// 	log.Info("Restore Error: no accounts to restore")
-		// 	return nil, gas, ErrInvalidProof // TODO: this error msg should be altered. (joonha)
-		// }
-		//=========================================================================================
 
 		// Reaching here, 'accounts' contains a list of accounts to be restored
 		// in the state trie.
@@ -616,14 +488,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// accounts 리스트에는 하나의 account만이 있다는 가정.
 		// 이 account는 addrToKey_inactive의 가장 최근 key 임.
 		// addr이 아니라 (incremental) key가 담겨있음에 유의.
-		// 
-		// 여러 inactive account를 한번에 restore하는 경우에는 이 부분이 수정돼야 함.
+		// 만약 여러 inactive accounts를 한번에 restore하는 경우에는 이 부분을 수정하면 됨.
 
 		
-		/***************************************/
+		/*************************************************************/
 		// RESTORE
-		/***************************************/
-
+		/*************************************************************/
 		log.Info("### account num", "len(accounts)", len(accounts))
 		if len(accounts) == 0 {
 			// Error: no accounts to restore (no need to restore)
@@ -635,9 +505,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		keysToDelete := make([]common.Hash, 0)
 
 		// CREATE (no Active account in the active trie)
-		log.Info("### flag 10")
 		if(common.HashToInt64(common.AddrToKey[inactiveAddr]) <= common.InactiveBoundaryKey) {
-			log.Info("### flag 11")
+			log.Info("### flag 11 CREATE")
 			common.RestoringByCreation = 1 // ref: statedb.go/getDeletedStateObject function
 
 			// 모듈화 해야 하는 부분
@@ -646,12 +515,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			/////////////////////////////////////////////////////////////////////////////////
 
 			// common.RestoringByCreation = 0
-			log.Info("### flag 12")
-			log.Info("restoring Balance", "restoring Balance", accounts[1].Balance)
-			resAcc.Balance.Add(resAcc.Balance, accounts[1].Balance)
-			log.Info("### flag 13")
+			log.Info("restoring Balance", "restoring Balance", accounts[0].Balance) // index 유의
+			resAcc.Balance.Add(resAcc.Balance, accounts[0].Balance)
 		} else { // MERGE (Active account exists in the active trie)
-			log.Info("### flag 14")
+			log.Info("### flag 14 MERGE")
 			common.Restoring = 0 // ref: statedb.go/getDeletedStateObject function
 			
 			// 모듈화 해야 하는 부분
@@ -661,13 +528,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 			common.Restoring = 1
 			log.Info("activeBalance", "activeBalance", activeBalance)
-			log.Info("restoring Balance", "restoring Balance", accounts[1].Balance) // TODO(joonha): account append 를 한 번으로 줄이고, 인덱스를 0으로 접근할 것.
-			log.Info("### flag 15")
-			resAcc.Balance.Add(activeBalance, accounts[1].Balance)
-			log.Info("### flag 16")
-
-			// update하면서 기존 것을 nil로 바꾸거나 해줘야 함.
-			// restore도 하나의 업데이트니까.
+			log.Info("restoring Balance", "restoring Balance", accounts[0].Balance) // index 유의
+			resAcc.Balance.Add(activeBalance, accounts[0].Balance)
 
 			// when restoring by merging, preexisting account should be deleted (joonha)
 			keysToDelete = append(common.KeysToDelete, common.AddrToKey[inactiveAddr])
@@ -675,17 +537,14 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 
 		// 세 번째 인자로 최종 balance를 넘김.
-		log.Info("### flag 17")
 		evm.Context.Restore(evm.StateDB, inactiveAddr, resAcc.Balance, evm.Context.BlockNumber) // restore balance
-		log.Info("### flag 18")
 		
 
 		/***************************************/
 		// REMOVE FROM INACTIVE TRIE
 		/***************************************/
-
 		// 여기서 삭제를 하면 두 번째 호출 시에 에러가 발생한다.
-		// 그래서 우선 comment-out 했다.
+		// 그래서 우선 comment-out 함. TODO(joonha): 두 번째 호출 시에 리스트 정리해주기.
 
 		// common.Flag 0: 첫째 시행, 1: 둘째 시행
 		if common.Flag == 1 {
@@ -693,27 +552,31 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			if len(common.AddrToKey_inactive[inactiveAddr]) > 0 {
 				common.AddrToKey_inactive[inactiveAddr] = common.AddrToKey_inactive[inactiveAddr][:len(common.AddrToKey_inactive[inactiveAddr])-1]
 			}
-			// 만약 그 리스트가 empty면 그 리스트를 지움. TODO
+			// // 만약 그 리스트가 empty면 그 리스트를 지움. TODO(joonha)
 			// _, ok := common.AddrToKey_inactive[inactiveAddr];
 			// if !ok { // empty map
 			// 	delete(common.AddrToKey_inactive, inactiveAddr);
 			// }
-			log.Info("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 1")
+			log.Info("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 1 (SECOND EXEC)")
 			common.Flag = 0
 		} else {
-			log.Info("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 0")
+			log.Info("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 0 (FIRST EXEC)")
 			common.Flag = 1
 		}
 		
 		// Remove inactive account from inactive Trie!	
-		
-		// common.KeysToDelete = make([]common.Hash, 0) // init // added when debugging
 		keysToDelete = append(keysToDelete, common.BytesToHash(inactiveKey[:]))
 		evm.StateDB.DeletePreviousLeafNodes(keysToDelete)
-		// common.KeysToDelete = make([]common.Hash, 0) // init
 
-		// restoration ends
+
+
+		/***************************************/
+		// RESTORATION ENDS
+		/***************************************/
 		common.Restoring = 0 
+
+
+
 
 	} else { // no restoration (normal transaction)
 		// value transfer tx
@@ -768,28 +631,22 @@ func parseProof(data []interface{}, blockNum int64, cnt *int, limit int) (common
 	blockHash := rawdb.ReadCanonicalHash(rawdb.GlobalDB, uint64(blockNum))
 	blockHeader := rawdb.ReadHeader(rawdb.GlobalDB, blockHash, uint64(blockNum))
 
-	log.Info("### flag 101")
+	log.Info("### flag 101 PARSE PROOF")
 
 	// get Merkle proof
 	// merkleProof := make(state.ProofList, 0)
 	merkleProof := make(common.ProofList, 0)
 
-	log.Info("### flag 102")
 	n := big.NewInt(0)
-	log.Info("### flag 103")
 	n.SetBytes(data[*cnt].([]byte))
-	log.Info("### flag 104")
 
 	for *cnt < limit {
-		log.Info("### flag 105")
 		pf := data[*cnt].([]byte)
-		// log.Info("### print proofs", "proofs", pf)
 		merkleProof = append(merkleProof, pf)
 		*cnt++
 	}
 	*cnt++ // for iteration
 
-	log.Info("### flag 107")
 	return merkleProof, blockHeader
 }
 
