@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// (joonha)
+// (joonha) TODO: 이거 사용되는지 확인하고, 아니면 지우기
 // type ProofList [][]byte // for external use
 type ProofList common.ProofList
 
@@ -895,3 +895,4 @@ func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 		}
 	}
 }
+// TODO: joonha 지우기 여기

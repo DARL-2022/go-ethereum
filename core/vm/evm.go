@@ -500,12 +500,30 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			/***********************************************/
 			// account: acc / key: inactiveKey
 			// TODO: 사용된 inactiveKey를 맵으로 저장할 것. (재사용 여부 체크)
+			// log.Info("AlreadyRestored value", "AlreadyRestored value", common.AlreadyRestored[inactiveKey])
 
+			// ref for mapping empty struct
+			// https://stackoverflow.com/questions/30213739/detecting-if-struct-exists-for-key-in-map
+			// if _, doExist := common.AlreadyRestored[inactiveKey]; !doExist { // inactiveKey is not in the map
+			v, _ := common.AlreadyRestored[inactiveKey]
+			if &v != nil { // first time to be restored
+			// _, found := common.AlreadyRestored[inactiveKey]
+			// var _, ok = common.AlreadyRestored[inactiveKey]
+			// log.Info("found", "found", found)
+			// 버그(?) 발견
+			// if문의 found를 false 체크하면 found는 true로 셋됨.
+			// if문의 found를 true 체크하면 found는 false로 셋됨.
+			// if ok == false { // both true and false, this jumps to 'else'
+				log.Info("NEW NEW NEW")
+				// declaring a empty variable
+				// https://stackoverflow.com/questions/52231115/creating-map-with-empty-values
+				common.AlreadyRestored[inactiveKey] = struct{}{} // assign an empty struct
+			} else { // already restored
+				log.Info("restore err: it has already been restored")
+				return nil, gas, ErrInvalidProof // TODO: alter the err msg
+			}
 
-
-
-
-
+			// Q. 이 리스트가 reset 될 필요가 있나? 영원히 append? -> 우선은 그럴 듯.
 			
 
 
