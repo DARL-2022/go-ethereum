@@ -138,4 +138,6 @@ func Restore(db vm.StateDB, inactiveAddr common.Address, amount, blockNum *big.I
 	newNonce := big.NewInt(0)
 	newNonce.Mul(blockNum, big.NewInt(64))
 	db.SetNonce(inactiveAddr, newNonce.Uint64())
+
+	// addrToKey를 업데이트하거나 updatestateobject를 수행해야 하나?
 }

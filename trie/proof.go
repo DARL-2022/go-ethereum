@@ -332,12 +332,12 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 			nn := hasher.shortnodeToHash(collapsed, false) // nn: hashnode
 			fmt.Println("selected branch: ", nn)
 
-			i := 0
-			for i < 16 {
+			i := 15 // from the latest
+			for i >= 0 {
 				fmt.Println("common.BytesToHash(nn.(hashNode)): ", common.BytesToHash(nn.(hashNode)))
 				// to avoid panic
 				if n.Children[i] == nil {
-					i++
+					i--
 					continue
 				}
 				fmt.Println("common.BytesToHash((n.Children[i]).(hashNode)): ", common.BytesToHash((n.Children[i]).(hashNode)))
@@ -347,7 +347,7 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 					tKey = append(tKey, selectedByte[len(selectedByte)-1])
 					break
 				}
-				i++
+				i--
 			}
 		}
 

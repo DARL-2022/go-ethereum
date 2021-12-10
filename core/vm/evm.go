@@ -202,8 +202,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
 
-	// (joonha) is commenting out to fix 0123~789 account being added to trie
-	if !evm.StateDB.Exist(addr) {
+	// (joonha)
+	if !evm.StateDB.Exist(addr) { // Exist 함수 내에서 activeTrie로부터만 검색해야 함.
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
 			// Calling a non existing account, don't do anything, but ping the tracer
 			if evm.Config.Debug {
@@ -217,7 +217,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			}
 			return nil, gas, nil
 		}
-		// evm.StateDB.CreateAccount(addr)
+		// if it is not a restoration tx, should create the account
+		if addr != common.HexToAddress("0x0123456789012345678901234567890123456789") {
+			evm.StateDB.CreateAccount(addr)
+		}
 	}
 
 
