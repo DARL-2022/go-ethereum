@@ -572,6 +572,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	addrKey_bigint := new(big.Int)
 	addrKey_bigint.SetString(addrKey.Hex()[2:], 16)
 	// fmt.Println("addrKey_bigint:", addrKey_bigint.Int64(), "/ CheckpointKey:", s.CheckpointKey)
+	
 	if addrKey_bigint.Int64() >= s.CheckpointKey {
 		// this address is newly created address OR already moved address. so just update
 		// fmt.Println("insert -> key:", addrKey.Hex(), "/ addr:", addr.Hex())
@@ -579,7 +580,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
 		common.PrevAmount[addr] = obj.data.Balance // (joonha)		
-	} else if addrKey_bigint.Int64() >= common.InactiveBoundaryKey { // InactiveBoundaryKey 이후여야 함!!!!!!!!!! (joonha)
+	} else if addrKey_bigint.Int64() >= common.InactiveBoundaryKey {
 		// this address is already in the trie, so move the previous leaf node to the right side (delete & insert)
 
 		// do not delete this now, just append s.KeysToDeleteDirty to delete them at once later (periodical delete)
@@ -605,7 +606,9 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 
 		common.PrevAmount[addr] = obj.data.Balance // (joonha)
 
-	} else { // adding new account where inactive account might already exist (joonha) 
+	} else { // creating a crumb account
+
+		// adding new account where inactive account might already exist (joonha) 
 		// there CAN be an inactive account. If then, act like this account is a new account. 
 		// also Updating AddrToKey is needed.
 		// No deletion is needed.
@@ -619,22 +622,49 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		// insert new leaf node at right side
 		newAddrHash := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
 		s.AddrToKeyDirty[addr] = newAddrHash
-		// fmt.Println("insert -> key:", newAddrHash.Hex(), "/ addr:", addr.Hex())
+		fmt.Println("insert -> key:", newAddrHash.Hex(), "/ addr:", addr.Hex())
 		
-		// create not by restoring은 updatestateobject가 아니라 create로 여겨져야 한다.
-		// 현재는 여기에서 업데이트를 하고 있으니까 
-		// 이렇게 하지 말고 create를 해야 할 듯?
 
-		// creating by restoring은 이미 evm.go에서 처리함.
-		// creating a crumb account는 여기서 수행함.
-		// 아닌 경우가 있을까?
-		// 예를 들어서 restoring = 1 이라면? 여기에 걸릴 일이 있을까? -> merging 시에 여기 걸림.
-		// 혹은 restoringByCreation = 1 인 경우가 있나? -> create 한 경우에도 여기에서 trie 업데이트를 하는 듯.
+		// // 1. 세 케이스를 구분해야함.
+		// // 2. crumb의 경우 account를 새로 만들어줘야함.
+		// // 그런데 restore transaction의 경우, updatestateobject 이 함수가 실행되지 않음.
+		// // 즉 고려하지 않아도 됨. -----> 아닌 듯. restore도 영향을 받아버림.
+		// // crumb
+
+		// // CRUMB ACCOUNT
+		// s.CreateAccount(addr)
+		// addrKey, doExist = s.AddrToKeyDirty[addr]
+		// if !doExist {
+		// 	fmt.Println("!doExist, addrKey")
+		// 	addrKey = common.AddrToKey[addr]
+		// } else {
+		// 	fmt.Println("doExist, addrKey: ", addrKey)
+		// }
+		// if err = s.trie.TryUpdate_SetKey(addrKey[:], data); err != nil {
+		// 	s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		// }
+		// fmt.Println("data: ", data)
+		// fmt.Println("obj: ", obj)
+		// fmt.Println("\n\nobj.data.Balance: ", obj.data.Balance, "\n\n")
+
+		// // below is for debugging by printing
+		// enc, _ := s.trie.TryGet_SetKey(addrKey[:])
+		// na := new(Account)
+		// if err := rlp.DecodeBytes(enc, na); err != nil {
+		// 	// log.Error("Failed to decode state object", "addr", addr, "err", err)
+		// 	// return nil
+		// }
+		// fmt.Println("na balance: ", na.Balance)
+		// na.Balance.Add(na.Balance, obj.data.Balance)
+		// fmt.Println("na balance: ", na.Balance)
+
+
+		// // RESTORED ACCOUNT BY CREATING
+
+		// // RESTORED ACCOUTN BY MERGING
 
 		// balance
 		if common.Restoring == 0 && common.RestoringByCreation == 0 { // Create not by restoring (creating a crumb account)
-			// obj의 data의 Balance를 새 balance로 초기화 한 후 사용해야 함.
-			// 거래 데이터의 input 값을 받을 수 있어야 함.
 			// fmt.Println("\n\nobj.data.Balance: ", obj.data.Balance, "\n\n")
 			obj.data.Balance = obj.data.Balance.Sub(obj.data.Balance, common.PrevAmount[addr])
 			// fmt.Println("\n\ncommon.PrevAmount: ", common.PrevAmount, "\n\n")
@@ -781,6 +811,13 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 			key = common.AddrToKey_inactive[addr][lastIndex]
 		}
 
+		// if the account has already been inactivated, return nil
+		// TODO(joonha) inactive바운더리 말고 checkpoint가 되어야할것같긴함
+		if restoring == 0 && common.HashToInt64(key) < common.InactiveBoundaryKey { // 처음 딱 시작할 때 키값이 더 작기 때문에 
+			fmt.Println("^0^^0^^0^^0^^0^^0^^0^^0^^0^^0^^0^^0^^0^^0^")
+			return nil
+		}
+
 		enc, err := s.trie.TryGet_SetKey(key[:]) // 키로 account를 받아옴.
 
 		// 기존에는 아래처럼 addr로부터 account 를 받아오고 있었는데, 이는 도중에 해싱을 하는 함수였음.
@@ -824,17 +861,36 @@ func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 // the given address, it is overwritten and returned as the second return value.
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 
+	// 문제: inactiveTrie에 account가 존재하면 createObject가 실행이 안됨.
+	// 단순한 updateStateObject로 됨.
+	// 그러니까 updateStateObject에서 createAccount를 호출하자.
+	fmt.Println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	fmt.Println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	fmt.Println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+
 	// insert to map to make compactTrie (jmlee)
-	_, doExist := common.AddrToKey[addr]
-	if !doExist && addr != common.ZeroAddress {
+	key, doExist := common.AddrToKey[addr]
+	if !doExist && addr != common.ZeroAddress { // creating whole-new account
 		newAddrKey := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
 		// fmt.Println("make new account -> addr:", addr.Hex(), "/ keyHash:", newAddrKey)
+		s.AddrToKeyDirty[addr] = newAddrKey
+		s.NextKey += 1
+	} else if doExist && common.HashToInt64(key) < s.CheckpointKey { // creating crumb account (joonha)
+		newAddrKey := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
 		s.AddrToKeyDirty[addr] = newAddrKey
 		s.NextKey += 1
 	}
 
 	// get the object from the active trie (joonha)
-	prev = s.getDeletedStateObject(addr, 0) // Note, prev might have been deleted, we need that!
+	// prev = s.getDeletedStateObject(addr, 0) // Note, prev might have been deleted, we need that!
+
+	// creating a crumb account, don't get the prev account
+	if doExist && common.HashToInt64(key) < s.CheckpointKey {
+		fmt.Println("^~^~^~^~^~^~^~^~^~^")
+		prev = nil
+	} else {
+		prev = s.getDeletedStateObject(addr, 0) // Note, prev might have been deleted, we need that!
+	}
 
 	var prevdestruct bool
 	if s.snap != nil && prev != nil {
@@ -907,7 +963,7 @@ func (s *StateDB) createObject_restoring(addr common.Address) (newobj, prev *sta
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
 	newObj, prev := s.createObject(addr)
-	if prev != nil {
+	if prev != nil { // previous account in Active trie
 		newObj.setBalance(prev.data.Balance) // --> original code
 	}
 }
