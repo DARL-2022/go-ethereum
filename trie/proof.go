@@ -332,10 +332,15 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 			nn := hasher.shortnodeToHash(collapsed, false) // nn: hashnode
 			fmt.Println("selected branch: ", nn)
 
-			// err case: 133/r(1)r(1)33/r(1)
-			// panic: interface conversion: trie.node is nil, not trie.hashNode
 			i := 0
 			for i < 16 {
+				fmt.Println("common.BytesToHash(nn.(hashNode)): ", common.BytesToHash(nn.(hashNode)))
+				// to avoid panic
+				if n.Children[i] == nil {
+					i++
+					continue
+				}
+				fmt.Println("common.BytesToHash((n.Children[i]).(hashNode)): ", common.BytesToHash((n.Children[i]).(hashNode)))
 				if common.BytesToHash(nn.(hashNode)) == common.BytesToHash((n.Children[i]).(hashNode)) {
 					// key append
 					selectedByte := common.HexToHash("0x" + indices[i])
