@@ -143,6 +143,10 @@ type StateDB struct {
 	CheckpointKey		int64 // save initial NextKey value to determine whether move leaf nodes or not
 	AddrToKeyDirty		map[common.Address]common.Hash // dirty cache for common.AddrToKey
 	KeysToDeleteDirty	[]common.Hash // dirty cache for common.KeysToDelete
+
+	// (joonha)
+	AlreadyRestoredDirty 	map[common.Hash]common.Empty
+	AddrToKeyDirty_inactive	map[common.Address][]common.Hash // dirty cache for common.AddrToKey_inactive
 }
 
 // New creates a new state from a given trie.
@@ -174,6 +178,8 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		CheckpointKey: 		 nextKey.Int64(),
 		AddrToKeyDirty:	 	 make(map[common.Address]common.Hash),
 		KeysToDeleteDirty:	 make([]common.Hash, 0),
+		AlreadyRestoredDirty:make(map[common.Hash]common.Empty), // (joonha)
+		AddrToKeyDirty_inactive:make(map[common.Address][]common.Hash), // (joonha)
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -351,41 +357,19 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 
 // GetProof returns the Merkle proof for a given account.
 func (s *StateDB) GetProof(addr common.Address) ([][]byte, error) {
-
-	// 현재는 머클검증을 AddrToKey_inactive에서 받은 key로 만든다. 
-	// 검증 생성자는 어차피 addrToKey_inactive로부터 key를 얻어서 검증 경로를 만들어야 하니까
-	// 이는 더 이상 수정이 필요 없다.
-
-	// 여기서 length를 검사하는 것은 AlreadyRestored를 검사하는 것과 다르다.
-	// 그걸 시뮬레이션 해보려고 한다면,
-	// 우선 아카이브 노드는 인풋으로 들어온 addr에 대해 inactiveKey를 알아서 알고 그 머클검증을 보내준다.
-	// 라이트 노드를 생각해보자. 
-	// 라이트 노드에서는 누군가가 보내온 머클검증으로부터 key를 만들어서 
-	// 그 키의 재사용 여부를 확인하는 것이다.
-	// 그렇다면 이를 잘 거르는지를 확인하려면,
-	// 이미 사용된 머클검증을 재사용하고, 이를 거를 수 있는지를 보면 된다.
-	// 그러면... 새 input을 보내는 부분에서 재사용을 하면 된다.
-	// 이를 위해 restore.py 에서 sendRestoreTx를 두 번 수행하겠다. (될까?) 안되네.
-	// 아 혹은 sendRestoreTx 내에서 sendTransaction을 수행하는데, 이걸 두 번 해보자. 이것도 아니고, 
-	// 블록 채굴을 2회 시행해보자.
-	// 이러면 성공적으로 1회 restore과 1회 오류 발생이 되는데,
-	// 문제는 이 오류가 아카이브 노드가 자체적으로 내뿜는 오류라는 점.
-	// 그럼 악의적인 클라이언트가 머클검증을 재사용하는 것은 어떻게 검사해야 할까?
-	// 라이트 클라이언트 단에서 검사하면 됨.
-	// restore.py에서 proofs를 재사용하면 되는 건데, 
-	// sendTransaction 내에서 두 번 보내보겠음. 
-	// 일단 현재 방법으로 두 번의 restore 시행 중 한 번만 시행이 됨을 확인함.
-	// 그런데 이게 짧은 블록 채굴 간격(@restore.py) 때문에 그런 것인지 다시 볼 필요가 있음.
-
-	// (joonha)
+	// (joonha) 왜 여기서 예외처리가 안되지? 왜 터지지? 왜 여기 안 걸리지? -> 삭제가 안됐구나 
 	if len(common.AddrToKey_inactive[addr]) <= 0 {
-		return nil, errors.New("No Account to Restore (ethane)")
+		return nil, errors.New("No Account to Restore (ethane) (1)")
 	}
 
 	lastIndex := len(common.AddrToKey_inactive[addr]) - 1
 	
 	fmt.Println("lastIndex is ", lastIndex)
 	fmt.Println("addrToKey_inactive is ", common.AddrToKey_inactive[addr])
+
+	if common.AddrToKey_inactive[addr][lastIndex] == common.ToBeDeletedKey {
+		return nil, errors.New("No Account to Restore (ethane) (2)")
+	}
 
 	_, ok := common.AddrToKey_inactive[addr];
 	if !ok { // empty map
@@ -592,7 +576,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 		}
 		common.PrevAmount[addr] = obj.data.Balance // (joonha)		
-	} else if addrKey_bigint.Int64() >= common.InactiveBoundaryKey {
+	} else if addrKey_bigint.Int64() >= common.InactiveBoundaryKey { // 이게 맞나?
 		// this address is already in the trie, so move the previous leaf node to the right side (delete & insert)
 
 		// do not delete this now, just append s.KeysToDeleteDirty to delete them at once later (periodical delete)
@@ -636,6 +620,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		s.AddrToKeyDirty[addr] = newAddrHash
 		fmt.Println("insert -> key:", newAddrHash.Hex(), "/ addr:", addr.Hex())
 		
+		// TODO(joonha) 여기 정리.
 
 		// // 1. 세 케이스를 구분해야함.
 		// // 2. crumb의 경우 account를 새로 만들어줘야함.
@@ -675,14 +660,14 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 
 		// // RESTORED ACCOUTN BY MERGING
 
-		// balance
-		if common.Restoring == 0 && common.RestoringByCreation == 0 { // Create not by restoring (creating a crumb account)
-			// fmt.Println("\n\nobj.data.Balance: ", obj.data.Balance, "\n\n")
-			obj.data.Balance = obj.data.Balance.Sub(obj.data.Balance, common.PrevAmount[addr])
-			// fmt.Println("\n\ncommon.PrevAmount: ", common.PrevAmount, "\n\n")
-			// fmt.Println("\n\nobj.data.Balance: ", obj.data.Balance, "\n\n")
-			data, err = rlp.EncodeToBytes(obj)
-		} 
+		// // balance
+		// if common.Restoring == 0 && common.RestoringByCreation == 0 { // Create not by restoring (creating a crumb account)
+		// 	// fmt.Println("\n\nobj.data.Balance: ", obj.data.Balance, "\n\n")
+		// 	obj.data.Balance = obj.data.Balance.Sub(obj.data.Balance, common.PrevAmount[addr])
+		// 	// fmt.Println("\n\ncommon.PrevAmount: ", common.PrevAmount, "\n\n")
+		// 	// fmt.Println("\n\nobj.data.Balance: ", obj.data.Balance, "\n\n")
+		// 	data, err = rlp.EncodeToBytes(obj)
+		// } 
 
 		if err = s.trie.TryUpdate_SetKey(newAddrHash[:], data); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
@@ -823,11 +808,14 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 			key = common.AddrToKey_inactive[addr][lastIndex]
 		}
 
-		// if the account has already been inactivated, return nil
-		// TODO(joonha) inactive바운더리 말고 checkpoint가 되어야할것같긴함
+		// if the account has already been inactivated, return nil (crumb account)
 		if restoring == 0 && common.HashToInt64(key) < common.InactiveBoundaryKey { // 처음 딱 시작할 때 키값이 더 작기 때문에 
+			fmt.Println("should create a crumb account")
 			fmt.Println("^0^^0^^0^^0^^0^^0^^0^^0^^0^^0^^0^^0^^0^^0^")
+			// ERR: 왜 완전 처음 나타난 account도 이것을 출력하는가?
 			return nil
+		} else if restoring == 0 && common.HashToInt64(key) >= common.InactiveBoundaryKey {
+			fmt.Println("whole new account should be created")
 		}
 
 		enc, err := s.trie.TryGet_SetKey(key[:]) // 키로 account를 받아옴.
@@ -1042,10 +1030,43 @@ func (s *StateDB) Copy() *StateDB {
 		CheckpointKey: 		 s.CheckpointKey,
 		AddrToKeyDirty:		 make(map[common.Address]common.Hash, len(s.AddrToKeyDirty)),
 		KeysToDeleteDirty:	 make([]common.Hash, len(s.KeysToDeleteDirty)),
+		AlreadyRestoredDirty:make(map[common.Hash]common.Empty, len(s.AlreadyRestoredDirty)), // (joonha)
+		AddrToKeyDirty_inactive:	make(map[common.Address][]common.Hash, len(s.AddrToKeyDirty_inactive)), // (joonha)
 	}
 	// Copy the dirty states, logs, and preimages
 	for key, value := range s.AddrToKeyDirty {
 		state.AddrToKeyDirty[key] = value
+	}
+	// (joonha)
+	for key, value := range s.AlreadyRestoredDirty {
+		state.AlreadyRestoredDirty[key] = value
+	}
+	// (joonha)
+	fmt.Println("len(s.AddrToKeyDirty_inactive): ", len(s.AddrToKeyDirty_inactive))
+	for key, _ := range s.AddrToKeyDirty_inactive {
+		fmt.Println("I'm here 2 (joonha)") // (joonha)
+		// deep copy
+		for idx, value := range s.AddrToKeyDirty_inactive[key] {
+			fmt.Println("I'm here 3 (joonha)") // (joonha)
+			_, doExist := state.AddrToKeyDirty_inactive[key]
+			if !doExist {
+				fmt.Println("I'm here 3-1 (joonha)") // (joonha)
+				state.AddrToKeyDirty_inactive[key] = make([]common.Hash, len(s.AddrToKeyDirty_inactive[key]))
+			}
+			state.AddrToKeyDirty_inactive[key][idx] = value
+			fmt.Println("I'm here 3-2 (joonha)") // (joonha)
+		}
+		fmt.Println("I'm here 4 (joonha)") // (joonha)
+		if len(s.AddrToKeyDirty_inactive[key]) > 0 { 
+			fmt.Println("I'm here 5 (joonha)") // (joonha)
+			state.AddrToKeyDirty_inactive[key] = state.AddrToKeyDirty_inactive[key][:len(s.AddrToKeyDirty_inactive[key])]
+		}
+		fmt.Println("I'm here 6 (joonha)") // (joonha)
+		
+		_, ok := s.AddrToKeyDirty_inactive[key];
+		if !ok { // empty map
+			delete(state.AddrToKeyDirty_inactive, key);
+		}
 	}
 	for i := 0; i < len(s.KeysToDeleteDirty); i++ {
 		state.KeysToDeleteDirty[i] = s.KeysToDeleteDirty[i]
@@ -1325,6 +1346,100 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	common.AddrToKeyMapMutex.Unlock()
 
+	fmt.Println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
+	fmt.Println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
+	fmt.Println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
+	fmt.Println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
+	fmt.Println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
+	fmt.Println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
+	fmt.Println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
+	fmt.Println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
+	// apply dirties to common.AlreadyRestored (joonha)
+	// for key, value := range s.AlreadyRestoredDirty {
+	// 	fmt.Println("UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU")
+	// 	common.AlreadyRestored[key] = value
+	// }
+	fmt.Println("len(s.AlreadyRestoredDirty): ", len(s.AlreadyRestoredDirty))
+	for key, _ := range s.AlreadyRestoredDirty {
+		fmt.Println("UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU")
+		common.AlreadyRestored[key] = common.Empty{}
+	}
+
+	// apply dirties to common.AddrToKey_inactive (joonha)
+	fmt.Println("len(s.AddrToKeyDirty_inactive): ", len(s.AddrToKeyDirty_inactive))
+	for key, _ := range s.AddrToKeyDirty_inactive {
+		fmt.Println("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
+		prevLen := 0
+		_, doExist_1 := common.AddrToKey_inactive[key]
+		if doExist_1 {
+			prevLen = len(common.AddrToKey_inactive[key])
+		} else {
+			prevLen = 1
+		}
+
+		for _, value := range s.AddrToKeyDirty_inactive[key] {
+
+			fmt.Println("I'm here (3) (joonha)") // (joonha)
+			_, doExist := common.AddrToKey_inactive[key]
+			if !doExist {
+				fmt.Println("I'm here (3-1) (joonha)") // (joonha)
+				common.AddrToKey_inactive[key] = make([]common.Hash, len(s.AddrToKeyDirty_inactive[key]))
+				fmt.Println("addr: ", key)
+				fmt.Println("common.AddrToKey_inactive[addr][0]: ", common.AddrToKey_inactive[key][0])
+			}
+			fmt.Println("I'm here (3-2) (joonha)") // (joonha)
+			fmt.Println("length: ", len(common.AddrToKey_inactive[key]))
+			// prevLen := len(common.AddrToKey_inactive[key])
+			common.AddrToKey_inactive[key] = append(common.AddrToKey_inactive[key], value)
+			fmt.Println("common.AddrToKey_inactive[addr][0]: ", common.AddrToKey_inactive[key][0])
+			// fmt.Println("common.AddrToKey_inactive[addr][1]: ", common.AddrToKey_inactive[key][1])
+			fmt.Println("length: ", len(common.AddrToKey_inactive[key]))
+			// if !doExist {
+			// 	common.AddrToKey_inactive[key] = common.AddrToKey_inactive[key][1:]
+			// }
+			// common.AddrToKey_inactive[key] = common.AddrToKey_inactive[key][prevLen-1:]
+			fmt.Println("common.AddrToKey_inactive[addr][0]: ", common.AddrToKey_inactive[key][0])
+			fmt.Println("length: ", len(common.AddrToKey_inactive[key]))
+
+		}
+		// prevLen := len(common.AddrToKey_inactive[key])
+		common.AddrToKey_inactive[key] = common.AddrToKey_inactive[key][prevLen:]
+
+		// // NoExistKey 다 잘라내기
+		// for i := len(s.AddrToKeyDirty_inactive[key]) - 1; ; i-- {
+		// 	if s.AddrToKeyDirty_inactive[key][i] == common.ToBeDeletedKey {
+		// 			s.AddrToKeyDirty_inactive[key] = s.AddrToKeyDirty_inactive[key][:len(s.AddrToKeyDirty_inactive[key])-1]
+		// 	}
+		// }
+
+		if len(s.AddrToKeyDirty_inactive[key]) > 0 { 
+			fmt.Println("I'm here (3-3) (joonha)")
+			delNum := 0
+			for i := len(s.AddrToKeyDirty_inactive[key]) - 1; i > 0; i-- {
+				fmt.Println("I'm here (3-4) (joonha)")
+				if s.AddrToKeyDirty_inactive[key][i] == common.ToBeDeletedKey {
+						s.AddrToKeyDirty_inactive[key] = s.AddrToKeyDirty_inactive[key][:len(s.AddrToKeyDirty_inactive[key])-1]
+						delNum++
+				} else {
+					fmt.Println("I'm here (3-5) (joonha)")
+					break
+				}
+			}
+			fmt.Println("delNum: ", delNum)
+			fmt.Println("I'm here (3-6) (joonha)")
+			common.AddrToKey_inactive[key] = common.AddrToKey_inactive[key][:len(common.AddrToKey_inactive[key])-delNum]
+			fmt.Println("I'm here (3-7) (joonha)")
+		}
+
+		fmt.Println("I'm here (3-8) (joonha)")
+
+		_, ok := s.AddrToKeyDirty_inactive[key];
+		if !ok { // empty map
+			delete(common.AddrToKey_inactive, key);
+		}
+	}
+
+
 	// apply dirties to common.KeysToDelete (jmlee)
 	// for i := 0; i < len(s.KeysToDeleteDirty); i++ {
 	// 	fmt.Println("s.KeysToDeleteDirty[",i,"]:", s.KeysToDeleteDirty[i])
@@ -1495,43 +1610,45 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 	// TODO: optimize this code, this is too naive
 	// normTrie := s.trie.GetTrie() // TODO: using this function, we can delete SecureTrie.***_SetKey functions
 	
-	// AccountsToInactivate := make([][]byte, 0)
-	// KeysToInactivate := make([]common.Hash, 0)
-	// for i := inactiveBoundaryKey; i < lastKeyToCheck; i++ {
-	// 	// check there is leaf node with this key
-	// 	hash := common.Int64ToHash(i)
+	AccountsToInactivate := make([][]byte, 0)
+	KeysToInactivate := make([]common.Hash, 0)
+	for i := inactiveBoundaryKey; i < lastKeyToCheck; i++ {
+		// check there is leaf node with this key
+		hash := common.Int64ToHash(i)
 
-	// 	// leafNode, err := normTrie.TryGet(hash[:]) // original code by jmlee
-	// 	leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
+		// leafNode, err := normTrie.TryGet(hash[:]) // original code by jmlee
+		leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
 
-	// 	// find inactive leaf node, append the key to the list
-	// 	if leafNode != nil && err == nil {
-	// 		fmt.Println("O: there is a leaf node at key", hash.Hex())
-	// 		AccountsToInactivate = append(AccountsToInactivate, leafNode)
-	// 		KeysToInactivate = append(KeysToInactivate, hash)
-	// 	} else {
-	// 		fmt.Println("X: there is no leaf node at key", hash.Hex())
-	// 	}
-	// }
+		// find inactive leaf node, append the key to the list
+		if leafNode != nil && err == nil {
+			fmt.Println("O: there is a leaf node at key", hash.Hex())
+			AccountsToInactivate = append(AccountsToInactivate, leafNode)
+			KeysToInactivate = append(KeysToInactivate, hash)
+		} else {
+			fmt.Println("X: there is no leaf node at key", hash.Hex())
+		}
+	}
 
-	// DFS the non-nil account from the trie (joonha)
-	// secure_trie.go/TryGetAll_SetKey -> trie.go/TryGetAll -> trie.go/tryGetAll
-	firstKey := common.Int64ToHash(inactiveBoundaryKey)
-	lastKey := common.Int64ToHash(lastKeyToCheck)
-	AccountsToInactivate, KeysToInactivate, _ := s.trie.TryGetAll_SetKey(firstKey[:], lastKey[:])
+	// // DFS the non-nil account from the trie (joonha)
+	// // secure_trie.go/TryGetAll_SetKey -> trie.go/TryGetAll -> trie.go/tryGetAll
+	// firstKey := common.Int64ToHash(inactiveBoundaryKey)
+	// lastKey := common.Int64ToHash(lastKeyToCheck)
+	// AccountsToInactivate, KeysToInactivate, _ := s.trie.TryGetAll_SetKey(firstKey[:], lastKey[:])
 
 	fmt.Println("Accounts length: ", len(AccountsToInactivate))
 	fmt.Println("Keys length: ", len(KeysToInactivate))
 
 	// move inactive leaf nodes to left
-	for index, _ := range KeysToInactivate {
+	// for index, _ := range KeysToInactivate { // DFS
+	for index, key := range KeysToInactivate { // naive
 
-		// // delete inactive leaf node --> change to deleting during DFS (joonha)
-		// fmt.Println("delete previous leaf node -> key:", key.Hex())
-		// fmt.Println("delete previous leaf node -> key:", key[:])
-		// if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
-		// 	s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
-		// }
+		// comment out when DFS
+		// delete inactive leaf node --> changed to deleting during DFS (joonha)
+		fmt.Println("delete previous leaf node -> key:", key.Hex())
+		fmt.Println("delete previous leaf node -> key:", key[:])
+		if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
+		}
 
 		// insert inactive leaf node to left
 		keyToInsert := common.Int64ToHash(inactiveBoundaryKey + int64(index))
@@ -1551,9 +1668,15 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 
 			// save the inactive account key info for later restoration 
 			// Q. AddrToKey_inactive도 Dirty가 필요할까?
-			common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] = append(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])], keyToInsert)
-			
-			fmt.Println("addrToKey_inactive is ", common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
+			// common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])] = append(common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])], keyToInsert)
+			_, doExist := s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])]
+			if !doExist {
+				s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])] = common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])]
+			}
+			s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])] = append(s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])], keyToInsert)
+
+			// fmt.Println("addrToKey_inactive is ", common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
+			fmt.Println("s.AddrToKeyDirty_inactive is ", s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])])
 			fmt.Println("acc: ", common.BytesToAddress(AccountsToInactivate[index]))
 		}
 	}
@@ -1566,12 +1689,49 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 	return int64(len(KeysToInactivate))
 }
 
+// TODO(joonha) delete this
 // GetAccount returns Account from stateObject (joonha)
 func (s *StateDB) GetAccount(addr common.Address) *Account {
 	return &s.getStateObject(addr).data
 }
 
-
+// TODO(joonha) delete this
 func (s *StateDB) TryGet_SetKey_while_restoring(key []byte) ([]byte, error) {
 	return s.trie.TryGet_SetKey(key)
+}
+
+func (s *StateDB) UpdateAlreadyRestoredDirty(inactiveKey common.Hash) {
+	_, doExist := s.AlreadyRestoredDirty[inactiveKey]
+	if !doExist {
+		s.AlreadyRestoredDirty = map[common.Hash]common.Empty{}
+	}
+	s.AlreadyRestoredDirty[inactiveKey] = common.Empty{}
+	fmt.Println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& AlreadyRestoredDirty map length: ", len(s.AlreadyRestoredDirty))
+}
+
+func (s *StateDB) RemoveRestoredKeyFromAddrToKeyDirty_inactive(inactiveAddr common.Address) {
+	
+	_, doExist := s.AddrToKeyDirty_inactive[inactiveAddr]
+	if !doExist {
+		s.AddrToKeyDirty_inactive[inactiveAddr] = common.AddrToKey_inactive[inactiveAddr]
+	}
+
+	fmt.Println("제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발")
+	fmt.Println("제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발")
+	fmt.Println("제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발")
+	fmt.Println("제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발")
+	fmt.Println("제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발제발")
+	fmt.Println("len(s.AddrToKeyDirty_inactive[inactiveAddr]): ", len(s.AddrToKeyDirty_inactive[inactiveAddr]))
+	// if len(s.AddrToKeyDirty_inactive[inactiveAddr]) > 0 {
+	// 	// 자르지 말고 값을 바꾼 후, commit할 때 그 값이면 자르기.
+	// 	s.AddrToKeyDirty_inactive[inactiveAddr] = s.AddrToKeyDirty_inactive[inactiveAddr][:len(s.AddrToKeyDirty_inactive[inactiveAddr])-1]
+	// } // 이걸 두 번 수행하면 안될 것 같음.
+	s.AddrToKeyDirty_inactive[inactiveAddr][len(s.AddrToKeyDirty_inactive[inactiveAddr])-1] = common.ToBeDeletedKey
+	fmt.Println("len(s.AddrToKeyDirty_inactive[inactiveAddr]): ", len(s.AddrToKeyDirty_inactive[inactiveAddr]))
+
+	// // 만약 그 리스트가 empty면 그 리스트를 지움. --> commit에서
+	// _, ok := s.AddrToKeyDirty_inactive[inactiveAddr];
+	// if !ok { // empty map
+	// 	delete(s.AddrToKeyDirty_inactive, inactiveAddr);
+	// }
 }

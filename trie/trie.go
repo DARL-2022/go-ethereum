@@ -140,20 +140,6 @@ func (t *Trie) TryGet(key []byte) ([]byte, error) {
 	return value, err
 }
 
-// return the found accounts and the keys of the accounts (joonha)
-func (t *Trie) TryGetAll(firstKey, lastKey []byte) ([][]byte, []common.Hash, error) {
-	
-	// init
-	Accounts = make([][]byte, 0)
-	Keys = make([]common.Hash, 0)	
-	
-	_, newroot, didResolve, err := t.tryGetAll(t.root, keybytesToHex(firstKey), keybytesToHex(lastKey), 0) // 마지막 파라미터로 position을 넘겨주고 있음. 이를 이용하면 좋을 듯. (joonha)
-	if err == nil && didResolve {
-		t.root = newroot
-	}
-	return Accounts, Keys, err
-}
-
 func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
 	switch n := (origNode).(type) {
 	case nil:
@@ -190,6 +176,20 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 	}
 }
 
+// return the found accounts and the keys of the accounts (joonha)
+func (t *Trie) TryGetAll(firstKey, lastKey []byte) ([][]byte, []common.Hash, error) {
+	
+	// init
+	Accounts = make([][]byte, 0)
+	Keys = make([]common.Hash, 0)	
+	
+	_, newroot, didResolve, err := t.tryGetAll(t.root, keybytesToHex(firstKey), keybytesToHex(lastKey), 0) // 마지막 파라미터로 position을 넘겨주고 있음. 이를 이용하면 좋을 듯. (joonha)
+	if err == nil && didResolve {
+		t.root = newroot
+	}
+	return Accounts, Keys, err
+}
+
 // DFS by recursion (joonha)
 func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
 	
@@ -198,7 +198,7 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 	// tryGetAll function does:
 	// TRAVERSE from the firstKey to the lastKey
 	// SAVE the account info to the Accounts array and the Keys array
-	// and DELETE the account(set nil) in order to inactivate the account
+	// + DELETE the account(set nil) in order to inactivate the account
 	//
 	// pos: pointer pointing each digit of the key (related to the trie depth)
 	/****************************************************************************/
@@ -231,10 +231,34 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 
 		return n, n, false, nil
 	case *shortNode:
-		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
+		// if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
+		// 	// 
+		// 	fmt.Println("FFFFFFFF")
+		// 	fmt.Println("key not found in trie")
+		// 	fmt.Println("FFFFFFFF")
+		// 	// key not found in trie
+		// 	return nil, n, false, nil
+		// }
+		fmt.Println("SSSSSSSS")
+		fmt.Println("n.Key: ", n.Key)
+		fmt.Println("key[pos~]: ", key[pos:pos+len(n.Key)])
+
+		if len(key)-pos < len(n.Key) {
+			fmt.Println("FFFFFFFF")
+			fmt.Println("key not found in trie")
+			fmt.Println("FFFFFFFF")
 			// key not found in trie
 			return nil, n, false, nil
 		}
+		if !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
+			// this is the case
+			fmt.Println("AAAAAAAA")
+			fmt.Println("key not found in trie")
+			fmt.Println("AAAAAAAA")
+			// key not found in trie
+			return nil, n, false, nil
+		}
+		
 		value, newnode, didResolve, err = t.tryGetAll(n.Val, key, lastKey, pos+len(n.Key))
 		if err == nil && didResolve {
 			n = n.copy()
@@ -249,7 +273,7 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 		for i := key[pos]; i < 16; i++ {
 
 			// 만약 lastKey를 넘어가면 탐색 종료
-			if bytes.Compare(key, lastKey) >= 0 { // key > lastKey
+			if bytes.Compare(key, lastKey) >= 0 { // key >= lastKey
 				break;
 			}
 

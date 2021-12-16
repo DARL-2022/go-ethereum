@@ -89,6 +89,9 @@ type StateDB interface {
 	CreateAccount_restoring(common.Address)
 	Exist_InInactiveTrie(common.Address) bool	
 	TryGet_SetKey_while_restoring(key []byte) ([]byte, error)
+
+	UpdateAlreadyRestoredDirty(common.Hash)
+	RemoveRestoredKeyFromAddrToKeyDirty_inactive(common.Address)
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

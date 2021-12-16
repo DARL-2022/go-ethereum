@@ -237,8 +237,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if addr == common.HexToAddress("0x0123456789012345678901234567890123456789") { // restoration
 
 		// 이런 식의 상태 코드는 허술함. 보완 필요가 있음. (joonha)
-		common.Restoring = 1 // restoration starts
-		common.RestoringByCreation = 0 
+		// common.Restoring = 1 // restoration starts
+		// common.RestoringByCreation = 0 
 
 		log.Info("\n")
 
@@ -415,19 +415,22 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			/***********************************************/
 			// CHECK DOUBLE SPENDING OF THE INACTIVE KEY
 			/***********************************************/
-			// ref for mapping empty struct
-			// https://stackoverflow.com/questions/30213739/detecting-if-struct-exists-for-key-in-map
-			v, _ := common.AlreadyRestored[inactiveKey]
-			if &v != nil { // first time to be restored
-				log.Info("NEW NEW NEW")
+			v, doExist := common.AlreadyRestored[inactiveKey]
+			log.Info("v", "v", v)
+			log.Info("already", "already", doExist)
+			log.Info("already", "already", doExist)
+
+			if !doExist { // first time to be restored 
 				// declaring a empty variable
-				// https://stackoverflow.com/questions/52231115/creating-map-with-empty-values
-				common.AlreadyRestored[inactiveKey] = struct{}{} // assign an empty struct
+				// common.AlreadyRestored[inactiveKey] = common.Empty{} // struct{}{} // assign an empty struct
+				evm.StateDB.UpdateAlreadyRestoredDirty(inactiveKey)
+				log.Info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 			} else { // already restored
 				log.Info("restore err: it has already been restored")
 				return nil, gas, ErrInvalidProof // TODO: alter the err msg
 			}
 
+			// 최종 저장을 commit에서 하면 되는 것.
 			
 
 			/***********************************************/
@@ -476,7 +479,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// CREATE (no Active account in the active trie)
 		if(common.HashToInt64(common.AddrToKey[inactiveAddr]) <= common.InactiveBoundaryKey) {
 			log.Info("### flag 11 CREATE")
-			common.RestoringByCreation = 1 // ref: statedb.go/getDeletedStateObject function
+			// common.RestoringByCreation = 1 // ref: statedb.go/getDeletedStateObject function
 
 			// 모듈화 해야 하는 부분
 			/////////////////////////////////////////////////////////////////////////////////
@@ -488,22 +491,27 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			resAcc.Balance.Add(resAcc.Balance, accounts[0].Balance)
 		} else { // MERGE (Active account exists in the active trie)
 			log.Info("### flag 14 MERGE")
-			common.Restoring = 0 // ref: statedb.go/getDeletedStateObject function
+			// common.Restoring = 0 // ref: statedb.go/getDeletedStateObject function
 			
 			// 모듈화 해야 하는 부분
 			/////////////////////////////////////////////////////////////////////////////////
 			activeBalance := evm.StateDB.GetBalance(inactiveAddr) // Addr의 GetBalance가 맞고, inactive 것은 제외되고 있음.
 			/////////////////////////////////////////////////////////////////////////////////
 
-			common.Restoring = 1
+			// common.Restoring = 1
 			log.Info("activeBalance", "activeBalance", activeBalance)
 			log.Info("restoring Balance", "restoring Balance", accounts[0].Balance) // index 유의
 			resAcc.Balance.Add(activeBalance, accounts[0].Balance)
 
-			// when restoring by merging, preexisting account should be deleted (joonha)
-			keysToDelete = append(common.KeysToDelete, common.AddrToKey[inactiveAddr])
+			// when restoring by merging, preexisting (active) account should be deleted (joonha)
+			keysToDelete = append(common.KeysToDelete, common.AddrToKey[inactiveAddr]) // 굳이 여기서 지워야 하나?
 
 		}
+
+		// 삭제 실험 --> 여전히 안됨.
+		log.Info("inactiveKey[:]", "inactiveKey[:]", inactiveKey[:])
+		keysToDelete = append(keysToDelete, common.BytesToHash(inactiveKey[:]))
+		evm.StateDB.DeletePreviousLeafNodes(keysToDelete)
 
 		// 세 번째 인자로 최종 balance를 넘김.
 		evm.Context.Restore(evm.StateDB, inactiveAddr, resAcc.Balance, evm.Context.BlockNumber) // restore balance
@@ -515,23 +523,31 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// 여기서 삭제를 하면 두 번째 호출 시에 에러가 발생한다.
 		// 그래서 우선 comment-out 함. TODO(joonha): 두 번째 호출 시에 리스트 정리해주기.
 
-		// common.Flag 0: 첫째 시행, 1: 둘째 시행
-		if common.Flag == 1 {
-			// 리스트에서 삭제 (removing last elem from the slice)
-			if len(common.AddrToKey_inactive[inactiveAddr]) > 0 {
-				common.AddrToKey_inactive[inactiveAddr] = common.AddrToKey_inactive[inactiveAddr][:len(common.AddrToKey_inactive[inactiveAddr])-1]
-			}
-			// // 만약 그 리스트가 empty면 그 리스트를 지움. TODO(joonha)
-			// _, ok := common.AddrToKey_inactive[inactiveAddr];
-			// if !ok { // empty map
-			// 	delete(common.AddrToKey_inactive, inactiveAddr);
-			// }
-			log.Info("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 1 (SECOND EXEC)")
-			common.Flag = 0
-		} else {
-			log.Info("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 0 (FIRST EXEC)")
-			common.Flag = 1
-		}
+		// // common.Flag 0: 첫째 시행, 1: 둘째 시행
+		// if common.Flag == 1 {
+
+		// 	// 이 부분, statedb>commit에서 해주면 될 듯함.
+
+		// 	// 리스트에서 삭제 (removing last elem from the slice)
+		// 	if len(common.AddrToKey_inactive[inactiveAddr]) > 0 {
+		// 		common.AddrToKey_inactive[inactiveAddr] = common.AddrToKey_inactive[inactiveAddr][:len(common.AddrToKey_inactive[inactiveAddr])-1]
+		// 	}
+		// 	// // 만약 그 리스트가 empty면 그 리스트를 지움. TODO(joonha)
+		// 	// _, ok := common.AddrToKey_inactive[inactiveAddr];
+		// 	// if !ok { // empty map
+		// 	// 	delete(common.AddrToKey_inactive, inactiveAddr);
+		// 	// }
+
+		// 	evm.StateDB.RemoveRestoredKeyFromAddrToKeyDirty_inactive(inactiveAddr)
+
+		// 	log.Info("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 1 (SECOND EXEC)")
+		// 	common.Flag = 0
+		// } else {
+		// 	log.Info("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 0 (FIRST EXEC)")
+		// 	common.Flag = 1
+		// }
+
+		evm.StateDB.RemoveRestoredKeyFromAddrToKeyDirty_inactive(inactiveAddr)
 		
 		// Remove inactive account from inactive Trie!	
 		keysToDelete = append(keysToDelete, common.BytesToHash(inactiveKey[:]))
@@ -542,7 +558,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		/***************************************/
 		// RESTORATION ENDS
 		/***************************************/
-		common.Restoring = 0 
+		// common.Restoring = 0 
 
 
 

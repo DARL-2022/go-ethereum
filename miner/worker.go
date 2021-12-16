@@ -23,7 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	// "fmt"
+	"fmt"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
@@ -1093,6 +1093,8 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 		inactivatedAccountsNum := w.current.state.InactivateLeafNodes(common.InactiveBoundaryKey, lastKeyToCheck)
 		common.InactiveBoundaryKey += inactivatedAccountsNum
 	}
+
+	fmt.Println("reaching here, ,,,,") // (joonha)
 
 	w.commit(uncles, w.fullTaskHook, true, tstart)
 }

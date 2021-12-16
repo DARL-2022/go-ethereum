@@ -340,10 +340,32 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 					i--
 					continue
 				}
+
+				// if it is already used, continue to search another inactive account
+
+
 				fmt.Println("common.BytesToHash((n.Children[i]).(hashNode)): ", common.BytesToHash((n.Children[i]).(hashNode)))
 				if common.BytesToHash(nn.(hashNode)) == common.BytesToHash((n.Children[i]).(hashNode)) {
-					// key append
+
 					selectedByte := common.HexToHash("0x" + indices[i])
+					
+					// if this is already used, continue to search another inactive account
+					// TODO(joonha): simplify this code part
+					tKey_tmp := tKey
+					tKey_tmp = append(tKey_tmp, selectedByte[len(selectedByte)-1])
+					hexToInt_tmp := new(big.Int)
+					hexToInt_tmp.SetString(common.BytesToHash(hexToKeybytes(tKey_tmp)).Hex()[2:], 16)
+					tKey_i := hexToInt_tmp.Int64() // big.Int -> int64
+					retrievedKey_tmp := common.HexToHash(strconv.FormatInt(tKey_i, 16)) // int64 -> hex -> hash
+					_, doExist := common.AlreadyRestored[retrievedKey_tmp]
+					if doExist { // already restored
+						fmt.Println("ALREADY RESTORED, so continue to search")
+						i--
+						continue
+					}
+
+					// key append
+					// selectedByte := common.HexToHash("0x" + indices[i])
 					tKey = append(tKey, selectedByte[len(selectedByte)-1])
 					break
 				}

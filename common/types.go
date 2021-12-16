@@ -65,15 +65,19 @@ func (n *ProofList) Get(key []byte) ([]byte, error) {
 	return x, nil
 }
 
+type Empty struct{
+	// dummmy int8
+}
+
 var (
 	// for restoring (joonha)
 	Flag = int64(0) 
 	Restoring = int64(0)
 	PrevAmount = make(map[Address]*big.Int)
-	RestoringByCreation = int64(0)
+	// RestoringByCreation = int64(0)
 	// map with no value only key (for storage optimization, use empty struct as a value)
 	// https://stackoverflow.com/questions/57620170/can-you-have-a-map-with-no-value-in-go/57620378
-	AlreadyRestored = make(map[Hash]struct{})
+	AlreadyRestored = make(map[Hash]Empty) // make(map[Hash]int8) 
 
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
@@ -97,6 +101,7 @@ var (
 	CheckpointKeys = make(map[int64]int64) // initial NextKeys of blocks (CheckpointKeys[blockNumber] = initialNextKeyOfTheBlock)
 
 	NoExistKey = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") // very large key which will not be reached forever (const)
+	ToBeDeletedKey = HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe") // very large key which will not be reached forever (const)
 	ZeroAddress = HexToAddress("0x0") // (const)
 )
 
