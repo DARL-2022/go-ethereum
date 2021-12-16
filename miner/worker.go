@@ -23,7 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	// "fmt"
+	"fmt"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
@@ -1009,6 +1009,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		common.InactiveBoundaryKey += inactivatedAccountsNum
 	}
 
+	fmt.Println("reaching here, ,,,,") // (joonha)
+
 	w.commit(uncles, w.fullTaskHook, true, tstart)
 }
 
@@ -1017,6 +1019,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 func (w *worker) commit(uncles []*types.Header, interval func(), update bool, start time.Time) error {
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(w.current.receipts)
+	fmt.Println("I'm here 1 (joonha)") // (joonha)
 	s := w.current.state.Copy()
 	// fmt.Println("call FinalizeAndAssemble() at worker.commit()") // (jmlee)
 	block, err := w.engine.FinalizeAndAssemble(w.chain, w.current.header, s, w.current.txs, uncles, receipts)
