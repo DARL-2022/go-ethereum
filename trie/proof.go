@@ -349,7 +349,7 @@ func getKeyFromMerkleProof(nodeHash common.Hash, origNode node, tKey []byte, pro
 
 					selectedByte := common.HexToHash("0x" + indices[i])
 					
-					// if this is already used, continue to search another inactive account
+					// if this is already used, continue to search another inactive account during the epoch
 					// TODO(joonha): simplify this code part
 					tKey_tmp := tKey
 					tKey_tmp = append(tKey_tmp, selectedByte[len(selectedByte)-1])

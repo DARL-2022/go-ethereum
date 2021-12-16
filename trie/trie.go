@@ -231,6 +231,9 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 
 		return n, n, false, nil
 	case *shortNode:
+
+		// TODO(joonha) ERR occurs here
+
 		// if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
 		// 	// 
 		// 	fmt.Println("FFFFFFFF")

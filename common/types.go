@@ -65,19 +65,16 @@ func (n *ProofList) Get(key []byte) ([]byte, error) {
 	return x, nil
 }
 
-type Empty struct{
-	// dummmy int8
-}
+// (joonha)
+type Empty struct{}
 
 var (
 	// for restoring (joonha)
 	Flag = int64(0) 
 	Restoring = int64(0)
-	PrevAmount = make(map[Address]*big.Int)
-	// RestoringByCreation = int64(0)
 	// map with no value only key (for storage optimization, use empty struct as a value)
 	// https://stackoverflow.com/questions/57620170/can-you-have-a-map-with-no-value-in-go/57620378
-	AlreadyRestored = make(map[Hash]Empty) // make(map[Hash]int8) 
+	AlreadyRestored = make(map[Hash]Empty)
 
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})

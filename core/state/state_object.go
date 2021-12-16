@@ -456,22 +456,7 @@ func (s *stateObject) AddBalance(amount *big.Int) {
 		}
 		return
 	}
-	// fmt.Println("\n\ncommon.NewAmmount: ", common.NewAmount, "\n\n")
-	// fmt.Println("\n\ncommon.PrevAmmount: ", common.PrevAmount, "\n\n")
-	// // common.NewAmount = amount // (joonha)
-	// // common.PrevAmount = s.Balance() // (jooha)
-	// fmt.Println("\n\ncommon.NewAmmount: ", common.NewAmount, "\n\n")
-	// fmt.Println("\n\ncommon.PrevAmmount: ", common.PrevAmount, "\n\n")
-	s.SetBalance(new(big.Int).Add(s.Balance(), amount)) // --> original code
-
-	// (joonha)
-	// 만약 inactive account가 있는 상황에서 active account가 새로 만들어지는 경우에는
-	// 기존 밸런스를 무시하고 amount 만을 Set 하면 됨.
-	// if common.ReNew == 1 {
-	// 	s.SetBalance(new(big.Int).Add(big.NewInt(0), amount))
-	// } else {
-	// 	s.SetBalance(new(big.Int).Add(s.Balance(), amount))
-	// }
+	s.SetBalance(new(big.Int).Add(s.Balance(), amount))
 }
 
 // SubBalance removes amount from s's balance.
