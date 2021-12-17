@@ -185,15 +185,17 @@ func (t *Trie) TryGetAll(firstKey, lastKey []byte) ([][]byte, []common.Hash, err
 	return Accounts, Keys, err
 }
 
+// TODO(joonha): rename this function. tryGetAll is too vague.
 // DFS by recursion (joonha)
 func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
 	
 	// (joonha)
 	/****************************************************************************/ 
-	// tryGetAll function does:
-	// TRAVERSE from the firstKey to the lastKey
-	// SAVE the account info to the Accounts array and the Keys array
-	// + DELETE the account(set nil) in order to inactivate the account
+	// this function does:
+	// [TRAVERSE] from the firstKey to the lastKey
+	// [FIND] non-nil valueNodes to delete
+	// [SAVE] the found account info to the Accounts array and the Keys array
+	// [DELETE] the account(set nil) in order to inactivate the account
 	//
 	// pos: pointer pointing each digit of the key (related to the trie depth)
 	/****************************************************************************/
@@ -226,33 +228,7 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 
 		return n, n, false, nil
 	case *shortNode:
-
-		// TODO(joonha) ERR occurs here
-
-		// if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
-		// 	// 
-		// 	fmt.Println("FFFFFFFF")
-		// 	fmt.Println("key not found in trie")
-		// 	fmt.Println("FFFFFFFF")
-		// 	// key not found in trie
-		// 	return nil, n, false, nil
-		// }
-		fmt.Println("SSSSSSSS")
-		fmt.Println("n.Key: ", n.Key)
-		fmt.Println("key[pos~]: ", key[pos:pos+len(n.Key)])
-
-		if len(key)-pos < len(n.Key) {
-			fmt.Println("FFFFFFFF")
-			fmt.Println("key not found in trie")
-			fmt.Println("FFFFFFFF")
-			// key not found in trie
-			return nil, n, false, nil
-		}
-		if !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
-			// this is the case
-			fmt.Println("AAAAAAAA")
-			fmt.Println("key not found in trie")
-			fmt.Println("AAAAAAAA")
+		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
 			// key not found in trie
 			return nil, n, false, nil
 		}
