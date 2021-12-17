@@ -779,14 +779,16 @@ func (s *StateDB) setStateObject(object *stateObject) {
 func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		stateObject, _ = s.createObject(addr)
+		// stateObject, _ = s.createObject(addr) // --> original code
+		stateObject, _ = s.createObject(addr, nil) // (joonha)
 	}
 	return stateObject
 }
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
-func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
+func (s *StateDB) createObject(addr common.Address, blockNum *big.Int) (newobj, prev *stateObject) { // (joonha)
+// func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	// insert to map to make compactTrie (jmlee)
 	key, doExist := common.AddrToKey[addr]
 	if !doExist && addr != common.ZeroAddress { // creating whole-new account
@@ -822,6 +824,16 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	} else {
 		s.journal.append(resetObjectChange{prev: prev, prevdestruct: prevdestruct})
 	}
+
+	// if creating a crumb account, set nonce to blockNum * 64 (joonha)
+	if doExist && common.HashToInt64(key) < s.CheckpointKey {
+		if blockNum != nil {
+			newNonce := big.NewInt(0)
+			newNonce.Mul(blockNum, big.NewInt(64))
+			newobj.setNonce(newNonce.Uint64())
+		}
+	}
+
 	s.setStateObject(newobj)
 	if prev != nil && !prev.deleted {
 		return newobj, prev
@@ -878,9 +890,18 @@ func (s *StateDB) createObject_restoring(addr common.Address) (newobj, prev *sta
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
-	newObj, prev := s.createObject(addr)
+	// newObj, prev := s.createObject(addr)
+	newObj, prev := s.createObject(addr, nil) // (joonha)
 	if prev != nil { // previous account in Active trie
-		newObj.setBalance(prev.data.Balance) // --> original code
+		newObj.setBalance(prev.data.Balance)
+	}
+}
+
+// (joonha)
+func (s *StateDB) CreateAccount_withBlockNum(addr common.Address, blockNum *big.Int) {
+	newObj, prev := s.createObject(addr, blockNum)
+	if prev != nil { // previous account in Active trie
+		newObj.setBalance(prev.data.Balance)
 	}
 }
 

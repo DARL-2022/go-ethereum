@@ -87,6 +87,7 @@ type StateDB interface {
 	Database() state.Database
 	DeletePreviousLeafNodes([]common.Hash)
 	CreateAccount_restoring(common.Address)
+	CreateAccount_withBlockNum(common.Address, *big.Int)
 	UpdateAlreadyRestoredDirty(common.Hash)
 	RemoveRestoredKeyFromAddrToKeyDirty_inactive(common.Address)
 }

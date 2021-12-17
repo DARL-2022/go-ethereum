@@ -113,17 +113,23 @@ func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) 
 
 // [Eth4ne]
 // Restore restores the inactive account (joonha)
-func Restore(db vm.StateDB, inactiveAddr common.Address, amount, blockNum *big.Int) {
+func Restore(db vm.StateDB, inactiveAddr common.Address, amount, blockNum *big.Int, isMerge bool) {
 	// set account balance with 0 (delete cached balance)
 	bal := db.GetBalance(inactiveAddr)
 	db.SubBalance(inactiveAddr, bal)
 
 	// restore inactive account with latest state
 	db.AddBalance(inactiveAddr, amount)
-	
-	// set nonce (blockNumber * 64)
-	newNonce := big.NewInt(0)
-	newNonce.Mul(blockNum, big.NewInt(64))
-	db.SetNonce(inactiveAddr, newNonce.Uint64())
-	// TODO(joonha) nonce of crumb is not being updated. so fix it.
+
+	if isMerge {
+		// set nonce crumb's nonce + 1
+		newNonce := db.GetNonce(inactiveAddr) + 1
+		db.SetNonce(inactiveAddr, newNonce)
+
+	} else { // creating
+		// set nonce (blockNumber * MAX_TXS_PER_BLOCK)
+		newNonce := big.NewInt(0)
+		newNonce.Mul(blockNum, big.NewInt(64))
+		db.SetNonce(inactiveAddr, newNonce.Uint64())
+	}
 }

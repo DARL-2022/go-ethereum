@@ -186,6 +186,7 @@ func VerifyProof_ProofList(rootHash common.Hash, key []byte, proofDb common.Proo
 	}
 }
 
+// TODO(joonha): do construct this
 // (under construction) for proof optimization utilizing only the top node of merkle proof (joonha)
 func VerifyProof_restore(rootHash common.Hash, proofDb common.ProofList) (value []byte, err error) {
 	wantHash := rootHash

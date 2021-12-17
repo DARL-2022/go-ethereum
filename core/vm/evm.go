@@ -51,7 +51,7 @@ type (
 	TransferFunc func(StateDB, common.Address, common.Address, *big.Int)
 	// Restore function should be defined here (joonha) (ethane)
 	// RestoreFunc is the signature of a restore function (jmlee)
-	RestoreFunc func(StateDB, common.Address, *big.Int, *big.Int)
+	RestoreFunc func(StateDB, common.Address, *big.Int, *big.Int, bool)
 	// GetHashFunc returns the n'th block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
@@ -253,7 +253,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		// if it is not a restoration tx, should create the account
 		if addr != common.HexToAddress("0x0123456789012345678901234567890123456789") {
-			evm.StateDB.CreateAccount(addr)
+			// evm.StateDB.CreateAccount(addr) // --> original code
+			evm.StateDB.CreateAccount_withBlockNum(addr, evm.Context.BlockNumber) // (joonha)
+			// evm.Context.BlockNumber : *big.Int
 		}
 	}
 
@@ -502,6 +504,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		// CREATE OR MERGE
 		keysToDelete := make([]common.Hash, 0)
+		isMerge := false
 
 		// CREATE (no Active account in the active trie)
 		if(common.HashToInt64(common.AddrToKey[inactiveAddr]) <= common.InactiveBoundaryKey) {
@@ -521,13 +524,15 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			log.Info("restoring Balance", "restoring Balance", accounts[0].Balance) // index 유의
 			resAcc.Balance.Add(activeBalance, accounts[0].Balance)
 
+			isMerge = true // this is for nonce setting
+
 			// when restoring by merging, preexisting (active) account should be deleted (joonha)
 			keysToDelete = append(common.KeysToDelete, common.AddrToKey[inactiveAddr]) // 굳이 여기서 지워야 하나?
 
 		}
 
 		// 세 번째 인자로 최종 balance를 넘김.
-		evm.Context.Restore(evm.StateDB, inactiveAddr, resAcc.Balance, evm.Context.BlockNumber) // restore balance
+		evm.Context.Restore(evm.StateDB, inactiveAddr, resAcc.Balance, evm.Context.BlockNumber, isMerge) // restore balance
 		
 
 		/***************************************/
