@@ -1396,6 +1396,9 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 		common.DoDeleteLeafNode = false
 	}
 
+	// set common.UsingInactiveStorageSnapshot (joonha)
+	common.UsingInactiveStorageSnapshot = true
+
 	// print some of snapshot info for debugging (jmlee)
 	// if bc.snaps != nil {
 	// 	bcsnap := bc.snaps.Snapshot(bc.CurrentBlock().Root())

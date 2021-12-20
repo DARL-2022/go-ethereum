@@ -183,7 +183,7 @@ func (t *Trie) TryGetAll(firstKey, lastKey []byte) ([][]byte, []common.Hash, err
 	Accounts = make([][]byte, 0)
 	Keys = make([]common.Hash, 0)	
 	
-	_, newroot, didResolve, err := t.tryGetAll(t.root, keybytesToHex(firstKey), keybytesToHex(lastKey), 0) // 마지막 파라미터로 position을 넘겨주고 있음. 이를 이용하면 좋을 듯. (joonha)
+	_, newroot, didResolve, err := t.tryGetAll(t.root, keybytesToHex(firstKey), keybytesToHex(lastKey), 0)
 	if err == nil && didResolve {
 		t.root = newroot
 	}

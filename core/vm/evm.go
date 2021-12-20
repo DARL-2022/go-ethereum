@@ -238,10 +238,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	if addr == common.HexToAddress("0x0123456789012345678901234567890123456789") { // restoration
 
-		// 이런 식의 상태 코드는 허술함. 보완 필요가 있음. (joonha)
-		// common.Restoring = 1 // restoration starts
-		// common.RestoringByCreation = 0 
-
 		log.Info("\n")
 
 		/***************************************/
@@ -500,6 +496,15 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// 세 번째 인자로 최종 balance를 넘김.
 		evm.Context.Restore(evm.StateDB, inactiveAddr, resAcc.Balance, evm.Context.BlockNumber, isMerge) // restore balance
 		
+		/***************************************/
+		// RESTORE CA's STORAGE TRIE
+		/***************************************/
+		// 0. if the account is Contract account
+		// 1. rebuild the storage trie
+		// 1-1. verify if the rebuilt trie root is equal to the account's storage root
+		// 2. update active snapshot (이건 updatestateobject에서 자동으로 되는 건지 확인해봐야 할 듯함.)
+		// 3. remove inactive snapshot
+
 
 		/***************************************/
 		// REMOVE FROM INACTIVE TRIE

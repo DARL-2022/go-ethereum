@@ -616,6 +616,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			Balance  *big.Int
 			Root     common.Hash
 			CodeHash []byte
+			Addr	 common.Address // in compactTrie, addr should be an account instance (joonha)
 		}
 		if err := rlp.DecodeBytes(val, &acc); err != nil {
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
@@ -671,17 +672,21 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {
 				storeMarker = dl.genMarker[common.HashLength:]
 			}
-			onStorage := func(key []byte, val []byte, write bool, delete bool) error {
+			// flag(joonha): traversing a storage trie and writing storage snapshots (this may be the generation core)
+			onStorage := func(key []byte, val []byte, write bool, delete bool) error { // flag(joonha) key and value -> key = Hash(slot), value = slot value
 				defer func(start time.Time) {
 					snapStorageWriteCounter.Inc(time.Since(start).Nanoseconds())
 				}(time.Now())
 
+				// comment(joonha) 어떤 인스턴스가 delete고 write인건지 모르겠음. onStorage?
 				if delete {
+					// flag(joonha) deleting snapshots
 					rawdb.DeleteStorageSnapshot(batch, accountHash, common.BytesToHash(key))
 					snapWipedStorageMeter.Mark(1)
 					return nil
 				}
 				if write {
+					// flag(joonha) writing snapshots
 					rawdb.WriteStorageSnapshot(batch, accountHash, common.BytesToHash(key), val)
 					snapGeneratedStorageMeter.Mark(1)
 				} else {
