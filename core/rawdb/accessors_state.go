@@ -83,6 +83,7 @@ func ReadTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	return data
 }
 
+// flag(joonha)
 // important (jmlee)
 // WriteTrieNode writes the provided trie node database.
 func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {

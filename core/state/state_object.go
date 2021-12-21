@@ -309,6 +309,17 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 	s.setState(key, value)
 }
 
+// SetState_Restore set storage slot when restoring CA (joonha)
+func (s *stateObject) SetState_Restore(db Database, key, value common.Hash) {
+	// New value is different, update and journal the change
+	s.db.journal.append(storageChange{
+		account:  &s.address,
+		key:      key,
+		// prevalue: prev,
+	})
+	s.setState(key, value)
+}
+
 // SetStorage replaces the entire state storage with the given one.
 //
 // After this function is called, all original state will be ignored and state
