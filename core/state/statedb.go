@@ -177,6 +177,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		trie:                tr,
 		originalRoot:        root,
 		snaps:               snaps,
+		// snaps_inactive:		 snaps, // (joonha)
 		stateObjects:        make(map[common.Address]*stateObject),
 		stateObjectsPending: make(map[common.Address]struct{}),
 		stateObjectsDirty:   make(map[common.Address]struct{}),
@@ -201,11 +202,16 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	}
 	// inactive storage snapshot (joonha)
 	if common.UsingInactiveStorageSnapshot {
-		if sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root); sdb.snap_inactive != nil {
-			sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
-			sdb.snapAccounts_inactive = make(map[common.Hash][]byte)
-			sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
-		}
+
+		// if sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root); sdb.snap_inactive != nil {
+		// 	sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
+		// 	sdb.snapAccounts_inactive = make(map[common.Hash][]byte)
+		// 	sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
+		// }
+
+		sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
+		sdb.snapAccounts_inactive = make(map[common.Hash][]byte)
+		sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
 	}
 	return sdb, nil
 }
@@ -1155,6 +1161,34 @@ func (s *StateDB) Copy() *StateDB {
 			state.snapStorage[k] = temp
 		}
 	}
+
+	// (joonha)
+	if common.UsingInactiveStorageSnapshot {
+		// In order for the miner to be able to use and make additions
+		// to the snapshot tree, we need to copy that aswell.
+		// Otherwise, any block mined by ourselves will cause gaps in the tree,
+		// and force the miner to operate trie-backed only
+		state.snaps_inactive = s.snaps_inactive
+		state.snap_inactive = s.snap_inactive
+		// deep copy needed
+		state.snapDestructs_inactive = make(map[common.Hash]struct{})
+		for k, v := range s.snapDestructs_inactive {
+			state.snapDestructs_inactive[k] = v
+		}
+		state.snapAccounts_inactive = make(map[common.Hash][]byte)
+		for k, v := range s.snapAccounts_inactive {
+			state.snapAccounts_inactive[k] = v 
+		}
+		state.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
+		for k, v := range s.snapStorage_inactive {
+			temp := make(map[common.Hash][]byte)
+			for kk, vv := range v {
+				temp[kk] = vv
+			}
+			state.snapStorage_inactive[k] = temp
+		}
+	}
+
 	return state
 }
 
@@ -1487,17 +1521,33 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 
 	// update inactive storage snapshot (joonha)
 	if common.UsingInactiveStorageSnapshot {
-		// Only update if there's a state transition (skip empty Clique blocks)
-		if parent_inactive := s.snap_inactive.Root(); parent_inactive != root { // 이걸 검사하는 것이 맞는 것인지.
-			// TODO(joonha): snapAccount_inactive는 없을텐데... nil을 넘겨줘도 되는 건가? 그래도 되면 저장 효율을 위해 nil을 넘겨줄 것.
-			// snapDestructs_inactive는 restore할 때에 만들어질 것임.
-			if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, nil, s.snapStorage_inactive); err != nil { // flag(joonha) core/state/snapshot/snapshot.go의 Update 함수가 여기서 불림.
-				log.Warn("Failed to update snapshot tree", "from", parent_inactive, "to", root, "err", err)
+		if s.snap_inactive != nil {
+			// Only update if there's a state transition (skip empty Clique blocks)
+			if parent_inactive := s.snap_inactive.Root(); parent_inactive != root { // 이걸 검사하는 것이 맞는 것인지.
+				// TODO(joonha): snapAccount_inactive는 없을텐데... nil을 넘겨줘도 되는 건가? 그래도 되면 저장 효율을 위해 nil을 넘겨줄 것.
+				// snapDestructs_inactive는 restore할 때에 만들어질 것임.
+				if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, nil, s.snapStorage_inactive); err != nil { // flag(joonha) core/state/snapshot/snapshot.go의 Update 함수가 여기서 불림.
+					log.Warn("Failed to update snapshot tree", "from", parent_inactive, "to", root, "err", err)
+				}
+				if err := s.snaps_inactive.Cap(root, 128); err != nil {
+					log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
+				}
 			}
-			if err := s.snaps_inactive.Cap(root, 128); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
-			}
+		} else {
+			fmt.Println("s.snap_inactive is nil")
 		}
+		
+		
+		// if parent_inactive := s.snap_inactive.Root(); parent_inactive != root { // 이걸 검사하는 것이 맞는 것인지.
+		// 	// TODO(joonha): snapAccount_inactive는 없을텐데... nil을 넘겨줘도 되는 건가? 그래도 되면 저장 효율을 위해 nil을 넘겨줄 것.
+		// 	// snapDestructs_inactive는 restore할 때에 만들어질 것임.
+		// 	if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, nil, s.snapStorage_inactive); err != nil { // flag(joonha) core/state/snapshot/snapshot.go의 Update 함수가 여기서 불림.
+		// 		log.Warn("Failed to update snapshot tree", "from", parent_inactive, "to", root, "err", err)
+		// 	}
+		// 	if err := s.snaps_inactive.Cap(root, 128); err != nil {
+		// 		log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
+		// 	}
+		// }
 		s.snap_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive = nil, nil, nil, nil
 	}
 
@@ -1676,7 +1726,13 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 	// 2. move active storage snapshot to inactive storage snapshot
 	for _, key := range KeysToInactivate {
 
-		s.snapDestructs[key] = struct{}{} // add this to snapshot's delete list
+		// add this to snapshot's delete list
+		var doExist bool
+		_, doExist = s.snapDestructs[key]
+		if doExist {
+			s.snapDestructs[key] = struct{}{}
+		}
+
 		delete(s.snapAccounts, key) // delete this from snapshot's update list
 
 		// // we don't need inactive account snapshot, but in case of dependency btw storage and account, move accounts to inactive snapshot Tree
@@ -1687,14 +1743,17 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		// }
 		
 		// move storage snapshot to inactive snapshot Tree
-		s.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
-		for k, v := range s.snapStorage {
-			temp := make(map[common.Hash][]byte)
-			for kk, vv := range v {
-				temp[kk] = vv
+		if common.UsingInactiveStorageSnapshot {
+			s.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
+			for k, v := range s.snapStorage {
+				temp := make(map[common.Hash][]byte)
+				for kk, vv := range v {
+					temp[kk] = vv
+				}
+				s.snapStorage_inactive[k] = temp
 			}
-			s.snapStorage_inactive[k] = temp
 		}
+		
 		delete(s.snapStorage, key) // delete this from snapshot's update list
 	}
 

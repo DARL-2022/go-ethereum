@@ -1397,7 +1397,9 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	}
 
 	// set common.UsingInactiveStorageSnapshot (joonha)
-	common.UsingInactiveStorageSnapshot = true
+	common.UsingInactiveStorageSnapshot = true 
+	// TODO(joonha) inactive storage snapshot의 동작은 현재 full.sh의 snapshot 옵션을 켠 상태에서만 유효함. 
+	// TODO(joonha) active account + stroage snapshot 의 경우에도 이와 같이 옵션화 해줘야 함.
 
 	// print some of snapshot info for debugging (jmlee)
 	// if bc.snaps != nil {
