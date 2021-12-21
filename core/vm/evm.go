@@ -502,9 +502,13 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// 0. if the account is Contract account
 		// 1. rebuild the storage trie
 		// 1-1. verify if the rebuilt trie root is equal to the account's storage root
-		// 2. update active snapshot (이건 updatestateobject에서 자동으로 되는 건지 확인해봐야 할 듯함.)
+		// 2. update active snapshot
 		// 3. remove inactive snapshot
 
+		// statedb.go에서 snapshot.GenerateStorageTrie를 수행하는 함수를 여기서 콜함.
+		if common.UsingInactiveStorageSnapshot {
+			evm.StateDB.RebuildStorageTrieFromSnapshot(inactiveAddr, inactiveKey)
+		}
 
 		/***************************************/
 		// REMOVE FROM INACTIVE TRIE

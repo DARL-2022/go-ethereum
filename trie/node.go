@@ -277,10 +277,4 @@ func (n valueNode) toString(ind string, db *Database) string {
 	return fmt.Sprintf("Nonce:\t\t%d\n\t\tBalance:\t%s\n\t\tstorageRoot:\t%s\n\t\tcodeHash:\t%x\n\t\taddr:\t\t%s\n\t\tkey:\t\t%s\n", acc.Nonce, acc.Balance.String(), acc.Root, acc.CodeHash, acc.Addr, common.AddrToKey[acc.Addr]) // print (joonha)
 
 	// inactive account여도 AddrToKey_inactive 가 아니라 AddrToKey 가 출력되고 있으니 주의! 
-
-	// if common.HashToInt64(common.AddrToKey[acc.Addr]) > common.InactiveBoundaryKey {
-	// 	return fmt.Sprintf("Nonce:\t\t%d\n\t\tBalance:\t%s\n\t\tstorageRoot:\t%s\n\t\tcodeHash:\t%x\n\t\taddr:\t\t%s\n\t\tkey:\t\t%s\n", acc.Nonce, acc.Balance.String(), acc.Root, acc.CodeHash, acc.Addr, common.AddrToKey[acc.Addr]) // print (joonha)
-	// } else {
-	// 	return fmt.Sprintf("Nonce:\t\t%d\n\t\tBalance:\t%s\n\t\tstorageRoot:\t%s\n\t\tcodeHash:\t%x\n\t\taddr:\t\t%s\n\t\tkey:\t\t%s\n", acc.Nonce, acc.Balance.String(), acc.Root, acc.CodeHash, acc.Addr, common.AddrToKey_inactive[acc.Addr]) // print (joonha)
-	// }
 }
