@@ -166,6 +166,7 @@ type BlockChain struct {
 
 	db     ethdb.Database // Low level persistent database to store final content in
 	snaps  *snapshot.Tree // Snapshot tree for fast trie leaf access
+	snaps_inactive *snapshot.Tree // (joonha)
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
@@ -286,7 +287,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
-	if _, err := state.New(head.Root(), bc.stateCache, bc.snaps); err != nil {
+	// if _, err := state.New(head.Root(), bc.stateCache, bc.snaps); err != nil { // --> original code
+	if _, err := state.New_inactiveSnapshot(head.Root(), bc.stateCache, bc.snaps, bc.snaps_inactive); err != nil { // (joonha)
 		// Head state is missing, before the state recovery, find out the
 		// disk layer point of snapshot(if it's enabled). Make sure the
 		// rewound point is lower than disk layer.
@@ -379,6 +381,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			recover = true
 		}
 		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
+		bc.snaps_inactive, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover) // (joonha)
 	}
 
 	// Start future block processor.
@@ -534,7 +537,8 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 					if root != (common.Hash{}) && !beyondRoot && newHeadBlock.Root() == root {
 						beyondRoot, rootNumber = true, newHeadBlock.NumberU64()
 					}
-					if _, err := state.New(newHeadBlock.Root(), bc.stateCache, bc.snaps); err != nil {
+					// if _, err := state.New(newHeadBlock.Root(), bc.stateCache, bc.snaps); err != nil { // --> original code
+					if _, err := state.New_inactiveSnapshot(newHeadBlock.Root(), bc.stateCache, bc.snaps, bc.snaps_inactive); err != nil { // (joonha)
 						log.Trace("Block state missing, rewinding further", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						if pivot == nil || newHeadBlock.NumberU64() > *pivot {
 							parent := bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1)
@@ -662,8 +666,62 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	if bc.snaps != nil {
 		bc.snaps.Rebuild(block.Root())
 	}
+	// (joonha)
+	if bc.snaps_inactive != nil {
+		bc.snaps_inactive.Rebuild(block.Root())
+	}
+
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
 	return nil
+}
+
+// GasLimit returns the gas limit of the current HEAD block.
+func (bc *BlockChain) GasLimit() uint64 {
+	return bc.CurrentBlock().GasLimit()
+}
+
+// CurrentBlock retrieves the current head block of the canonical chain. The
+// block is retrieved from the blockchain's internal cache.
+func (bc *BlockChain) CurrentBlock() *types.Block {
+	return bc.currentBlock.Load().(*types.Block)
+}
+
+// flag(joonha)
+// Snapshots returns the blockchain snapshot tree.
+func (bc *BlockChain) Snapshots() *snapshot.Tree {
+	return bc.snaps
+}
+
+// CurrentFastBlock retrieves the current fast-sync head block of the canonical
+// chain. The block is retrieved from the blockchain's internal cache.
+func (bc *BlockChain) CurrentFastBlock() *types.Block {
+	return bc.currentFastBlock.Load().(*types.Block)
+}
+
+// Validator returns the current validator.
+func (bc *BlockChain) Validator() Validator {
+	return bc.validator
+}
+
+// Processor returns the current processor.
+func (bc *BlockChain) Processor() Processor {
+	return bc.processor
+}
+
+// State returns a new mutable state based on the current HEAD block.
+func (bc *BlockChain) State() (*state.StateDB, error) {
+	return bc.StateAt(bc.CurrentBlock().Root())
+}
+
+// StateAt returns a new mutable state based on a particular point in time.
+func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
+	// return state.New(root, bc.stateCache, bc.snaps) // --> original code
+	return state.New_inactiveSnapshot(root, bc.stateCache, bc.snaps, bc.snaps_inactive) // (joonha)
+}
+
+// StateCache returns the caching database underpinning the blockchain instance.
+func (bc *BlockChain) StateCache() state.Database {
+	return bc.stateCache
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -798,6 +856,14 @@ func (bc *BlockChain) Stop() {
 			log.Error("Failed to journal state snapshot", "err", err)
 		}
 	}
+	// (joonha)
+	var snapBase_inactive common.Hash
+	if bc.snaps_inactive != nil {
+		var err error
+		if snapBase_inactive, err = bc.snaps_inactive.Journal(bc.CurrentBlock().Root()); err != nil {
+			log.Error("Failed to journal state snapshot (2)", "err", err)
+		}
+	}
 
 	// Ensure the state of a recent block is also stored to disk before exiting.
 	// We're writing three different states to catch different restart scenarios:
@@ -823,6 +889,14 @@ func (bc *BlockChain) Stop() {
 				log.Error("Failed to commit recent state trie", "err", err)
 			}
 		}
+		// (joonha)
+		if snapBase_inactive != (common.Hash{}) {
+			log.Info("Writing snapshot state to disk", "root", snapBase_inactive)
+			if err := triedb.Commit(snapBase_inactive, true, nil); err != nil {
+				log.Error("Failed to commit recent state trie", "err", err)
+			}
+		}
+
 		for !bc.triegc.Empty() {
 			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
 		}
@@ -1677,7 +1751,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+		// statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps) // --> original code
+		statedb, err := state.New_inactiveSnapshot(parent.Root, bc.stateCache, bc.snaps, bc.snaps_inactive) // (joonha)
 		if err != nil {
 			return it.index, err
 		}
@@ -1691,7 +1766,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		var followupInterrupt uint32
 		if !bc.cacheConfig.TrieCleanNoPrefetch {
 			if followup, err := it.peek(); followup != nil && err == nil {
-				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
+				// throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps) // --> original code
+				throwaway, _ := state.New_inactiveSnapshot(parent.Root, bc.stateCache, bc.snaps, bc.snaps_inactive) // (joonha)
 
 				go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
 					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
