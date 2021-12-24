@@ -540,9 +540,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// 3. remove inactive snapshot
 
 		// statedb.go에서 snapshot.GenerateStorageTrie를 수행하는 함수를 여기서 콜함.
-		if common.UsingInactiveStorageSnapshot {
-			evm.StateDB.RebuildStorageTrieFromSnapshot(inactiveAddr, inactiveKey)
-		}
+		// if common.UsingInactiveStorageSnapshot == 1 {
+		// 	evm.StateDB.RebuildStorageTrieFromSnapshot(inactiveAddr, inactiveKey)
+		// }
+		evm.StateDB.RebuildStorageTrieFromSnapshot(inactiveAddr, inactiveKey)
 
 		/***************************************/
 		// REMOVE FROM INACTIVE TRIE

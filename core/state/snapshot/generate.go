@@ -141,6 +141,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 	log.Info(msg, ctx...)
 }
 
+// flag (joonha)
 // generateSnapshot regenerates a brand new snapshot based on an existing state
 // database and head block asynchronously. The snapshot is returned immediately
 // and generation is continued in the background until done.
@@ -168,6 +169,11 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 	go base.generate(stats)
 	log.Debug("Start snapshot generation", "root", root)
 	return base
+}
+
+// to export generateSnapshot (joonha)
+func GenerateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash) *diskLayer {
+	return generateSnapshot(diskdb, triedb, cache, root)
 }
 
 // journalProgress persists the generator stats into the database to resume later.

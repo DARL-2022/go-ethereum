@@ -70,7 +70,8 @@ type Empty struct{}
 
 var (
 	// inactive storage snapshot ON/OFF option (joonha)
-	UsingInactiveStorageSnapshot bool // true: ON, false: OFF
+	UsingInactiveStorageSnapshot = make(map[int64]Empty) // int64(0) // bool // true: ON, false: OFF
+	FirstFlag = make(map[int64]Empty) // int64(0) // bool
 
 	// check if it is already restored (for storage optimization, use empty struct as a value) (joonha)
 	AlreadyRestored = make(map[Hash]Empty) 

@@ -712,7 +712,7 @@ func (t *Tree) Rebuild(root common.Hash) {
 	// generator will run a wiper first if there's not one running right now.
 	log.Info("Rebuilding state snapshot")
 	t.layers = map[common.Hash]snapshot{
-		root: generateSnapshot(t.diskdb, t.triedb, t.cache, root),
+		root: generateSnapshot(t.diskdb, t.triedb, t.cache, root), ////////////////////////////////// (joonha) 루트 만들기
 	}
 }
 
