@@ -204,7 +204,8 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		}
 	}
 	// inactive storage snapshot (joonha)
-	if common.UsingInactiveStorageSnapshot {
+	if sdb.snaps_inactive != nil {
+	// if common.UsingInactiveStorageSnapshot == 1 {
 
 		// if sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root); sdb.snap_inactive != nil {
 		// 	sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
@@ -217,84 +218,16 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
 		fmt.Println("New")
 		fmt.Println("sdb.snaps_inactive: ", sdb.snaps_inactive) // nil
-		// fmt.Println("sdb.snaps_inactive.Snapshot(root): ", sdb.snaps_inactive.Snapshot(root)) // nil
-		// sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root)
+		fmt.Println("sdb.snaps_inactive.Snapshot(root): ", sdb.snaps_inactive.Snapshot(root)) // nil
+		if sdb.snap_inactive == nil {
+			sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root) /////////////////////////////////////////////// 엇 딱 이것만 바뀐건데? 오류가 발생하네? insufficient funds?
+		}
 
 		sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
 		sdb.snapAccounts_inactive = make(map[common.Hash][]byte)
 		sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
 	}
-	return sdb, nil
-}
-
-// New creates a new state from a given trie.
-func New_inactiveSnapshot(root common.Hash, db Database, snaps *snapshot.Tree, snaps_inactive *snapshot.Tree) (*StateDB, error) {
-	tr, err := db.OpenTrie(root)
-	if err != nil {
-		return nil, err
-	}
-	
-	// set NextKey as lastKey+1 (jmlee)
-	lastKey := tr.GetLastKey()
-	nextKey := new(big.Int)
-	nextKey.Add(lastKey, big.NewInt(1))
-	fmt.Println("next trie key to insert new leaf node:", nextKey.Int64())
-	sdb := &StateDB{
-		db:                  db,
-		trie:                tr,
-		originalRoot:        root,
-		snaps:               snaps,
-		snaps_inactive:		 snaps_inactive, // (joonha)
-		stateObjects:        make(map[common.Address]*stateObject),
-		stateObjectsPending: make(map[common.Address]struct{}),
-		stateObjectsDirty:   make(map[common.Address]struct{}),
-		logs:                make(map[common.Hash][]*types.Log),
-		preimages:           make(map[common.Hash][]byte),
-		journal:             newJournal(),
-		accessList:          newAccessList(),
-		hasher:              crypto.NewKeccakState(),
-		NextKey:		 	 nextKey.Int64(),
-		CheckpointKey: 		 nextKey.Int64(),
-		AddrToKeyDirty:	 	 make(map[common.Address]common.Hash),
-		KeysToDeleteDirty:	 make([]common.Hash, 0),
-		AlreadyRestoredDirty:make(map[common.Hash]common.Empty), // (joonha)
-		AddrToKeyDirty_inactive:make(map[common.Address][]common.Hash), // (joonha)
-	}
-	if sdb.snaps != nil {
-		fmt.Println("^O^O^O^O^O^O^O^O^O^O^^O^OO^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^")
-		fmt.Println("^O^O^O^O^O^O^O^O^O^O^^O^OO^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^")
-		fmt.Println("^O^O^O^O^O^O^O^O^O^O^^O^OO^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^")
-		// fmt.Println("sdb.snaps: ", sdb.snaps)
-		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
-			fmt.Println("sdb.snaps.Snapshot(root): ", sdb.snaps.Snapshot(root))
-			sdb.snapDestructs = make(map[common.Hash]struct{})
-			sdb.snapAccounts = make(map[common.Hash][]byte)
-			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
-		}
-	}
-	// inactive storage snapshot (joonha)
-	if common.UsingInactiveStorageSnapshot {
-
-		// if sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root); sdb.snap_inactive != nil {
-		// 	sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
-		// 	sdb.snapAccounts_inactive = make(map[common.Hash][]byte)
-		// 	sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
-		// }
-
-		fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
-		fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
-		fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
-		fmt.Println("New_inactiveSnapshot")
-		fmt.Println("sdb.snaps_inactive: ", sdb.snaps_inactive)
-		if sdb.snaps_inactive != nil {
-			fmt.Println("sdb.snaps_inactive.Snapshot(root): ", sdb.snaps_inactive.Snapshot(root)) // nil
-			sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root) // 이게 nil이어서 commit에서 update가 안됨.
-		}
-		
-		sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
-		sdb.snapAccounts_inactive = make(map[common.Hash][]byte)
-		sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
-	}
+	// common.UsingInactiveStorageSnapshot = true
 	return sdb, nil
 }
 
@@ -842,19 +775,20 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 		// 			}
 		// 		}
 		// 	}
-		// }
-		// if common.UsingInactiveStorageSnapshot {
-		// 	for i := int64(0); i < maxIndexToPrint; i++ {
-		// 		key := common.HexToHash(strconv.FormatInt(i, 16))
-		// 		if acc, err := s.snap_inactive.Account(key); err == nil {
-		// 			if acc == nil {
-		// 				fmt.Println("snapshot_inactive[",i,"]: nil")
-		// 			} else {
-		// 				fmt.Println("snapshot_inactive[",i,"]: exist ->", acc)
+		// 	if common.UsingInactiveStorageSnapshot && s.snap_inactive != nil {
+		// 		for i := int64(0); i < maxIndexToPrint; i++ {
+		// 			key := common.HexToHash(strconv.FormatInt(i, 16))
+		// 			if acc, err := s.snap_inactive.Account(key); err == nil {
+		// 				if acc == nil {
+		// 					fmt.Println("snapshot_inactive[",i,"]: nil")
+		// 				} else {
+		// 					fmt.Println("snapshot_inactive[",i,"]: exist ->", acc)
+		// 				}
 		// 			}
 		// 		}
 		// 	}
 		// }
+		
 
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.SnapshotAccountReads += time.Since(start) }(time.Now())
@@ -1123,7 +1057,8 @@ func (s *StateDB) createObject_restoring(addr common.Address) (newobj, prev *sta
 	// 		s.snapDestructs[prev.addrHash] = struct{}{}
 	// 	}
 	// }
-	if common.UsingInactiveStorageSnapshot && prev != nil {
+	if s.snap_inactive != nil && prev != nil {
+	// if common.UsingInactiveStorageSnapshot == 1 && prev != nil {
 		_, prevdestruct = s.snapDestructs_inactive[prev.addrHash]
 		if !prevdestruct {
 			s.snapDestructs_inactive[prev.addrHash] = struct{}{}
@@ -1348,11 +1283,8 @@ func (s *StateDB) Copy() *StateDB {
 	}
 
 	// (joonha)
-	if common.UsingInactiveStorageSnapshot {
-		// In order for the miner to be able to use and make additions
-		// to the snapshot tree, we need to copy that aswell.
-		// Otherwise, any block mined by ourselves will cause gaps in the tree,
-		// and force the miner to operate trie-backed only
+	if s.snaps_inactive != nil {
+	// if common.UsingInactiveStorageSnapshot == 1 {
 		state.snaps_inactive = s.snaps_inactive
 		state.snap_inactive = s.snap_inactive
 		// deep copy needed
@@ -1690,12 +1622,14 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
+			fmt.Println("\n\nUpdate original snapshot is done here")
+			fmt.Println("parent_orig: ", parent)
+			fmt.Println("root_orig: ", root, "\n\n")
 			// code for debugging (jmlee)
-			// for k, v := range s.snapAccounts {
-			// 	fmt.Println("s.snapAccounts -> k:", k, "/ v:", v)
-			// }
+			for k, v := range s.snapAccounts {
+				fmt.Println("s.snapAccounts -> k:", k, "/ v:", v)
+			}
 
-			// flag(joonha) 여기서 state별로 snapshot을 업데이트 하고 있음.
 			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil { // flag(joonha) core/state/snapshot/snapshot.go의 Update 함수가 여기서 불림.
 				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
 			}
@@ -1706,39 +1640,47 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			if err := s.snaps.Cap(root, 128); err != nil {
 				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
 			}
+			fmt.Println("UPDATE HERE (1) &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&") 
 		}
+		fmt.Println("UPDATE HERE (2) &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&") 
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
+	fmt.Println("UPDATE HERE (3) &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+
+	fmt.Println("common.UsingInactiveStorageSnapshot: ", common.UsingInactiveStorageSnapshot) // false
 
 	// update inactive storage snapshot (joonha)
-	if common.UsingInactiveStorageSnapshot {
-		if s.snap_inactive != nil { // 이게 nil이어서 update가 안되고 있음.
+	if s.snap_inactive != nil {
+	// if common.UsingInactiveStorageSnapshot == 1 {
+	// if true {
+		fmt.Println("UPDATE HERE &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+		// s.snap_inactive = s.snaps_inactive.Snapshot(root) // 얘가 문제였구나. 
+		if s.snap_inactive != nil { 
+
+			// code for debugging
+			for k, v := range s.snapAccounts_inactive {
+				fmt.Println("s.snapAccounts_inactive -> k:", k, "/ v:", v)
+			}
+
 			// Only update if there's a state transition (skip empty Clique blocks)
-			if parent_inactive := s.snap_inactive.Root(); parent_inactive != root { // 이걸 검사하는 것이 맞는 것인지.
+			fmt.Println("\n\nparent_inactive: ", s.snap_inactive.Root())
+			fmt.Println("root: ", root, "\n\n")
+
+			if parent_inactive := s.snap_inactive.Root(); parent_inactive != root {
 				// TODO(joonha): snapAccount_inactive는 없을텐데... nil을 넘겨줘도 되는 건가? 그래도 되면 저장 효율을 위해 nil을 넘겨줄 것.
-				// snapDestructs_inactive는 restore할 때에 만들어질 것임.
-				if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive); err != nil { // flag(joonha) core/state/snapshot/snapshot.go의 Update 함수가 여기서 불림.
+				if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive); err != nil {
 					log.Warn("Failed to update snapshot tree", "from", parent_inactive, "to", root, "err", err)
 				}
 				if err := s.snaps_inactive.Cap(root, 128); err != nil {
 					log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
 				}
+				fmt.Println("UPDATE DONE 1 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
 			}
+			fmt.Println("UPDATE DONE 2 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
 		} else {
 			fmt.Println("s.snap_inactive is nil")
 		}
 		
-		
-		// if parent_inactive := s.snap_inactive.Root(); parent_inactive != root { // 이걸 검사하는 것이 맞는 것인지.
-		// 	// TODO(joonha): snapAccount_inactive는 없을텐데... nil을 넘겨줘도 되는 건가? 그래도 되면 저장 효율을 위해 nil을 넘겨줄 것.
-		// 	// snapDestructs_inactive는 restore할 때에 만들어질 것임.
-		// 	if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, nil, s.snapStorage_inactive); err != nil { // flag(joonha) core/state/snapshot/snapshot.go의 Update 함수가 여기서 불림.
-		// 		log.Warn("Failed to update snapshot tree", "from", parent_inactive, "to", root, "err", err)
-		// 	}
-		// 	if err := s.snaps_inactive.Cap(root, 128); err != nil {
-		// 		log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
-		// 	}
-		// }
 		s.snap_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive = nil, nil, nil, nil
 	}
 
@@ -1933,7 +1875,8 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		}
 
 		// move storage snapshot to inactive snapshot Tree
-		if common.UsingInactiveStorageSnapshot {
+		if s.snap_inactive != nil {
+		// if common.UsingInactiveStorageSnapshot == 1 {
 			s.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
 			for k, v := range s.snapStorage {
 				temp := make(map[common.Hash][]byte)
