@@ -910,7 +910,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 			if acc, err = s.snap.Account(key); err == nil {
 				// if acc, err = s.snap.Account(crypto.HashData(s.hasher, addr.Bytes())); err == nil { // -> original code
 				if acc == nil {
-					fmt.Println("  cannot find the address at the snapshot")
+					fmt.Println("  cannot find the address at the snapshot") // 스냅샷으로부터 account를 찾을 수가 없다고 한다.
 					return nil
 				}
 				data = &Account{
@@ -1696,6 +1696,11 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			for k, v := range s.snapAccounts_inactive {
 				fmt.Println("s.snapAccounts_inactive -> k:", k, "/ v:", v)
 			}
+			for k, v := range s.snapStorage_inactive {
+				for kk, vv := range v {
+					fmt.Println("s.snapStorage_inactive[", k, "] -> kk:", kk, "/ vv:", vv)
+				}
+			}
 
 			// Only update if there's a state transition (skip empty Clique blocks)
 			fmt.Println("\n\nparent_inactive: ", s.snap_inactive.Root())
@@ -1703,7 +1708,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 
 			if parent_inactive := s.snap_inactive.Root(); parent_inactive != root {
 				// TODO(joonha): snapAccount_inactive는 없을텐데... nil을 넘겨줘도 되는 건가? 그래도 되면 저장 효율을 위해 nil을 넘겨줄 것.
-				if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive); err != nil {
+				if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, nil, s.snapStorage_inactive); err != nil {
 					log.Warn("Failed to update snapshot tree", "from", parent_inactive, "to", root, "err", err)
 				}
 				if err := s.snaps_inactive.Cap(root, 128); err != nil {
@@ -1899,12 +1904,12 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			s.snapDestructs[key] = struct{}{}
 		}
 
-		// we don't need inactive account snapshot, but in case of storage depending on account, move accounts to inactive snapshot Tree
-		// if commenting this part out doesn't occur err, comment out for memory optimization.
-		s.snapAccounts_inactive = make(map[common.Hash][]byte) // append가 아니고 매 state마다 위로 차곡차곡 쌓는 형식 (diffLayers vary)
-		for k, v := range s.snapAccounts {
-			s.snapAccounts_inactive[k] = v
-		}
+		// // we don't need inactive account snapshot, but in case of storage depending on account, move accounts to inactive snapshot Tree
+		// // if commenting this part out doesn't occur err, comment out for memory optimization.
+		// s.snapAccounts_inactive = make(map[common.Hash][]byte) // append가 아니고 매 state마다 위로 차곡차곡 쌓는 형식 (diffLayers vary)
+		// for k, v := range s.snapAccounts {
+		// 	s.snapAccounts_inactive[k] = v
+		// }
 
 		// move storage snapshot to inactive snapshot Tree
 		if s.snap_inactive != nil {
@@ -1975,10 +1980,10 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(addr common.Address, key common
 	}
 
 
-	// add active account snapshot -> might be done in updateStateObject
-	for k, v := range s.snapAccounts_inactive {
-		s.snapAccounts[k] = v
-	}
+	// // add active account snapshot -> might be done in updateStateObject
+	// for k, v := range s.snapAccounts_inactive {
+	// 	s.snapAccounts[k] = v
+	// }
 	// add active storage snapshot
 	for k, v := range s.snapStorage_inactive {
 		temp := make(map[common.Hash][]byte)
