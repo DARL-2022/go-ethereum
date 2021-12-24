@@ -177,7 +177,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		trie:                tr,
 		originalRoot:        root,
 		snaps:               snaps,
-		snaps_inactive:		 snaps, // nil (joonha)
+		snaps_inactive:		 snaps, // (joonha)
 		stateObjects:        make(map[common.Address]*stateObject),
 		stateObjectsPending: make(map[common.Address]struct{}),
 		stateObjectsDirty:   make(map[common.Address]struct{}),
@@ -217,10 +217,10 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
 		fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
 		fmt.Println("New")
-		fmt.Println("sdb.snaps_inactive: ", sdb.snaps_inactive) // nil
-		fmt.Println("sdb.snaps_inactive.Snapshot(root): ", sdb.snaps_inactive.Snapshot(root)) // nil
+		fmt.Println("sdb.snaps_inactive: ", sdb.snaps_inactive) 
+		fmt.Println("sdb.snaps_inactive.Snapshot(root): ", sdb.snaps_inactive.Snapshot(root)) 
 		if sdb.snap_inactive == nil {
-			sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root) /////////////////////////////////////////////// 엇 딱 이것만 바뀐건데? 오류가 발생하네? insufficient funds?
+			sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root)
 		}
 
 		sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
@@ -228,6 +228,74 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
 	}
 	// common.UsingInactiveStorageSnapshot = true
+	return sdb, nil
+}
+
+// Second New function to get snaps_inactive info from blockchain.go (joonha)
+func New_inactiveSnapshot(root common.Hash, db Database, snaps *snapshot.Tree, snaps_inactive *snapshot.Tree) (*StateDB, error) {
+	tr, err := db.OpenTrie(root)
+	if err != nil {
+		return nil, err
+	}
+	
+	// set NextKey as lastKey+1 (jmlee)
+	lastKey := tr.GetLastKey()
+	nextKey := new(big.Int)
+	nextKey.Add(lastKey, big.NewInt(1))
+	fmt.Println("next trie key to insert new leaf node:", nextKey.Int64())
+	sdb := &StateDB{
+		db:                  db,
+		trie:                tr,
+		originalRoot:        root,
+		snaps:               snaps,
+		snaps_inactive:		 snaps_inactive, // (joonha)
+		stateObjects:        make(map[common.Address]*stateObject),
+		stateObjectsPending: make(map[common.Address]struct{}),
+		stateObjectsDirty:   make(map[common.Address]struct{}),
+		logs:                make(map[common.Hash][]*types.Log),
+		preimages:           make(map[common.Hash][]byte),
+		journal:             newJournal(),
+		accessList:          newAccessList(),
+		hasher:              crypto.NewKeccakState(),
+		NextKey:		 	 nextKey.Int64(),
+		CheckpointKey: 		 nextKey.Int64(),
+		AddrToKeyDirty:	 	 make(map[common.Address]common.Hash),
+		KeysToDeleteDirty:	 make([]common.Hash, 0),
+		AlreadyRestoredDirty:make(map[common.Hash]common.Empty), // (joonha)
+		AddrToKeyDirty_inactive:make(map[common.Address][]common.Hash), // (joonha)
+	}
+	if sdb.snaps != nil {
+		fmt.Println("^O^O^O^O^O^O^O^O^O^O^^O^OO^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^")
+		fmt.Println("^O^O^O^O^O^O^O^O^O^O^^O^OO^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^")
+		fmt.Println("^O^O^O^O^O^O^O^O^O^O^^O^OO^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^")
+		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
+			sdb.snapDestructs = make(map[common.Hash]struct{})
+			sdb.snapAccounts = make(map[common.Hash][]byte)
+			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+		}
+	}
+	// inactive storage snapshot (joonha)
+	if sdb.snaps_inactive != nil {
+	// if common.UsingInactiveStorageSnapshot == 1 {
+
+		// if sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root); sdb.snap_inactive != nil {
+		// 	sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
+		// 	sdb.snapAccounts_inactive = make(map[common.Hash][]byte)
+		// 	sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
+		// }
+
+		fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
+		fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
+		fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
+		fmt.Println("New_inactiveSnapshot")
+		fmt.Println("sdb.snaps_inactive: ", sdb.snaps_inactive)
+		fmt.Println("sdb.snaps_inactive.Snapshot(root): ", sdb.snaps_inactive.Snapshot(root))
+		sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root) // watch out: insufficient funds err may occur
+
+		sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
+		sdb.snapAccounts_inactive = make(map[common.Hash][]byte)
+		sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
+	}
 	return sdb, nil
 }
 
