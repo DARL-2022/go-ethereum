@@ -477,7 +477,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			log.Info("restoring Balance", "restoring Balance", accounts[0].Balance) // index 유의
 			resAcc.Balance.Add(resAcc.Balance, accounts[0].Balance)
 			
-			log.Info("merry christmas!")
 
 		} else { // MERGE (Active account exists in the active trie)
 			log.Info("### flag 14 MERGE")
@@ -497,7 +496,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		// 세 번째 인자로 최종 balance를 넘김.
 		evm.Context.Restore(evm.StateDB, inactiveAddr, resAcc.Balance, evm.Context.BlockNumber, isMerge) // restore balance
-		log.Info("merry christmas! 2")
 
 		/***************************************/
 		// RESTORE CA's STORAGE TRIE
@@ -517,14 +515,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// 정확히는 nil 맵에 접근하기 때문에 생기는 에러인데,
 		// 현재 스냅샷이 모두 날아가는 문제와 그 원인을 같이 하는 것으로 보인다.
 		// evm.StateDB.RebuildStorageTrieFromSnapshot(inactiveAddr, inactiveKey)
-		log.Info("merry christmas! 3")
 
 		/***************************************/
 		// REMOVE FROM INACTIVE TRIE
 		/***************************************/
 		// Remove inactive account from AddrToKey_inactive map
 		evm.StateDB.RemoveRestoredKeyFromAddrToKeyDirty_inactive(inactiveAddr)
-		log.Info("merry christmas! 4")
 		// Remove inactive account from inactive Trie
 		keysToDelete = append(keysToDelete, common.BytesToHash(inactiveKey[:]))
 		evm.StateDB.DeletePreviousLeafNodes(keysToDelete)

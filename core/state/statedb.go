@@ -299,6 +299,7 @@ func New_inactiveSnapshot(root common.Hash, db Database, snaps *snapshot.Tree, s
 	return sdb, nil
 }
 
+// flag (joonha) 이게 문제가 될까?
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
@@ -531,6 +532,7 @@ func (s *StateDB) Database() Database {
 	return s.db
 }
 
+// flag (joonha) 여기서 storage를 업데이트 하는 것인가? 근데 메인 함수 단에서는 호출이 안되는 것 같소만?
 // StorageTrie returns the storage trie of an account.
 // The return value is a copy and is nil for non-existent accounts.
 func (s *StateDB) StorageTrie(addr common.Address) Trie {
@@ -724,7 +726,8 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	} else { // < InactiveBoundaryKey : creating a crumb or restoring (joonha) 
 
 		// deleting prev(inactive)Account snapshot occurs in RebuildStorageTrieFromSnapshot
-		
+		s.KeysToDeleteDirty = append(s.KeysToDeleteDirty, addrKey) // 했는데 여기서 또 다시?
+
 		// adding new account where inactive account might already exist 
 		// there CAN be an inactive account. If then, act like this account is a new account. 
 		// also Updating AddrToKey is needed.
@@ -755,7 +758,9 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	if s.snap != nil {
 		// fmt.Println("addr:", obj.Address().Hex(), "update snapAccounts -> addrKey:", obj.addrHash.Hex())
 		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash) // flag(joonha) 스냅샷을 생성
-		
+		// snapStorage는 업데이트 안하나...?
+		// snapStorage는 어디서 어떻게 저장하는가?
+
 		// 새 키로 스냅샷을 만든 거니까, 이전 키의 스냅샷은 삭제해줘야 함. 단, key 업데이트 없는 경우는 제외. (joonha)
 		// 이는 기존 geth와 달리 compactMPT에서는 스냅샷의 value 뿐 아니라 key 도 바뀌기 때문임.
 		if obj.addrHash != prevAddrHash { // key has been changed
@@ -828,8 +833,16 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 		data *types.StateAccount
 		err  error
 	)
+
+
+	/****************************************************/
+	// SNAPSHOT
+	/****************************************************/
 	if s.snap != nil {
 
+		/***********************************/
+		// PRINT TO DEBUG
+		/***********************************/
 		// // print some of snapshot info for debugging (jmlee)
 		// maxIndexToPrint := int64(15)
 		// if s.snap != nil {
@@ -863,15 +876,18 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 		}
 		var acc *snapshot.Account
 
+
+		/************************************/
+		// GET KEY
+		/************************************/
 		// change key to make compactTrie (jmlee)
 		key, doExist := common.AddrToKey[addr]
-		fmt.Println("original key is ", key)
-		fmt.Println("restoring: ", restoring)
+		fmt.Println("original key is ", key) //
+		fmt.Println("restoring: ", restoring) //
 		if !doExist {
 			key = common.NoExistKey
 		}
-
-		// get key during restoring (joonha)
+		// get key from inactive trie (during restoring) (joonha)
 		if restoring == 1 {
 			lastIndex := len(common.AddrToKey_inactive[addr]) - 1
 			if lastIndex < 0 { // error handling
@@ -880,7 +896,6 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 			key = common.AddrToKey_inactive[addr][lastIndex]
 			fmt.Println("inactive key is ", key)
 		}
-
 		// if cannot find the account, return nil (joonha)
 		if restoring == 0 && common.HashToInt64(key) < common.InactiveBoundaryKey {
 			fmt.Println("key is ", key)
@@ -894,35 +909,18 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 			fmt.Println("key is ", key)
 			fmt.Println("can find the account in the active trie")
 		} 
-
 		fmt.Println("Try to find account at the snapshot -> addr:", addr.Hex(), "/ key:", key.Hex())
-		// if acc, err = s.snap.Account(key); err == nil {
-		// // if acc, err = s.snap.Account(crypto.HashData(s.hasher, addr.Bytes())); err == nil { // -> original code
-		// 	if acc == nil {
-		// 		fmt.Println("  cannot find the address at the snapshot") ////////////////////////// 여기에 걸림. 여기에 걸리는 게 스냅샷 안썼을 때와의 차이임.
-		// 		return nil
-		// 	}
-		// 	data = &Account{
-		// 		Nonce:    acc.Nonce,
-		// 		Balance:  acc.Balance,
-		// 		CodeHash: acc.CodeHash,
-		// 		Root:     common.BytesToHash(acc.Root),
-		// 		Addr:	  acc.Addr, // core/state/snapshot/account.go (joonha)
-		// 	}
-		// 	if len(data.CodeHash) == 0 {
-		// 		data.CodeHash = emptyCodeHash
-		// 	}
-		// 	if data.Root == (common.Hash{}) {
-		// 		data.Root = emptyRoot
-		// 	}
-		// }
 
+
+		/***********************************/
+		// GET KEY'S OBJECT
+		/***********************************/
 		if restoring == 0 {
 			fmt.Println("getDeletedStateObject >> restoring = 0 >> get account from snap ")
 			if acc, err = s.snap.Account(key); err == nil {
 				// if acc, err = s.snap.Account(crypto.HashData(s.hasher, addr.Bytes())); err == nil { // -> original code
 				if acc == nil {
-					fmt.Println("  cannot find the address at the snapshot") // 스냅샷으로부터 account를 찾을 수가 없다고 한다.
+					fmt.Println("  cannot find the address at the snapshot")
 					return nil
 				}
 				data = &Account{
@@ -942,12 +940,10 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 		} else if restoring == 1 { // during restoring, should get the account from inactive trie database not using the snapshot
 			fmt.Println("getDeletedStateObject >> restoring = 1 >> get account from trie ")
 			enc, err := s.trie.TryGet_SetKey(key[:])
-
 			if err != nil {
 				s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr.Bytes(), err))
 				return nil
 			}
-
 			if len(enc) == 0 {
 				fmt.Println("  cannot find the address outside of the snapshot (1)")
 				return nil
@@ -959,6 +955,11 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 			}
 		}
 	}
+
+
+	/****************************************************/
+	// NO SNAPSHOT
+	/****************************************************/
 	// If snapshot unavailable or reading from it failed, load from the database
 	if s.snap == nil || err != nil {
 		fmt.Println("Try to find account without snapshot -> addr:", addr.Hex())
@@ -966,7 +967,9 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 			defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
 		}
 
-		// (joonha)
+		/************************************/
+		// GET KEY
+		/************************************/
 		// key := common.AddrToKey[addr]
 		key, doExist := common.AddrToKey[addr]
 		fmt.Println("original key is ", key)
@@ -974,10 +977,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 		if !doExist {
 			key = common.NoExistKey
 		}
-
-		// (joonha)
 		// during restoration, get an obj from the inactiveTrie
-		// *** Commenting this part out, Error occurs.
 		// if lightNode, key should be nil or something that cannot be retrieved from AddrToKey_inactive
 		if restoring == 1 {
 			lastIndex := len(common.AddrToKey_inactive[addr]) - 1
@@ -987,7 +987,6 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 			key = common.AddrToKey_inactive[addr][lastIndex]
 			fmt.Println("inactive key is ", key)
 		}
-
 		// if the account has already been inactivated, return nil (crumb account) (joonha)
 		if restoring == 0 && common.HashToInt64(key) < common.InactiveBoundaryKey {
 			fmt.Println("key is ", key)
@@ -1002,14 +1001,16 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 			fmt.Println("the account is in the active trie")
 		}
 
+
+		/***********************************/
+		// GET KEY'S OBJECT
+		/***********************************/
 		enc, err := s.trie.TryGet_SetKey(key[:])
 		// enc, err := s.trie.TryGet(addr.Bytes()) // get account from state trie // --> original code
-
 		if err != nil {
 			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr.Bytes(), err))
 			return nil
 		}
-
 		if len(enc) == 0 {
 			fmt.Println("  cannot find the address outside of the snapshot (2)")
 			return nil
@@ -1020,6 +1021,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 			return nil
 		}
 	}
+
 	// Insert into the live set
 	obj := newObject(s, addr, *data)
 	s.setStateObject(obj)
@@ -1436,7 +1438,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				delete(s.snapStorage, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
 			}
 			// // (joonha)
-			// if common.UsingInactiveStorageSnapshot {
+			// if s.snap_inactive != nil {
 			// 	s.snapDestructs_inactive[obj.addrHash] = struct{}{} // We need to maintain account deletions explicitly (will remain set indefinitely)
 			// 	delete(s.snapAccounts_inactive, obj.addrHash)       // Clear out any previously updated account data (may be recreated via a ressurrect)
 			// 	delete(s.snapStorage_inactive, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
@@ -1757,6 +1759,16 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		s.snap_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive = nil, nil, nil, nil
 	}
 
+
+
+
+	fmt.Println("///////////////////////////////////////")
+	fmt.Println("//   s.trie.TryGet_SetKey(key[:])    //")
+	zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	fmt.Println("///////////////////////////////////////")
+
+
 	return root, err
 }
 
@@ -2004,6 +2016,9 @@ func (s *StateDB) RemoveRestoredKeyFromAddrToKeyDirty_inactive(inactiveAddr comm
 // rebuild a storage trie when restoring using snapshot (joonha)
 func (s *StateDB) RebuildStorageTrieFromSnapshot(addr common.Address, key common.Hash) {
 
+	// core/state/snapshot/snapshot.go의 StorageIteratore를 활용.
+	// Storage Snapshot을 accountHash와 blockHash로 접근하여 얻어낼 수 있음.
+	// 그 후 storage trie를 재구축하고 s.snapStorage를 재구축하면 됨.
 
 	// set storage retrieved from inactive storage snapshot
 	for k, v := range s.snapStorage_inactive[key] {

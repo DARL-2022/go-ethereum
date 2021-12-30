@@ -768,7 +768,7 @@ func (t *Tree) Verify(root common.Hash) error {
 	defer acctIt.Release()
 
 	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, stackTrieGenerate, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
-		storageIt, err := t.StorageIterator(root, accountHash, common.Hash{})
+		storageIt, err := t.StorageIterator(root, accountHash, common.Hash{}) // flag (joonha) 이런 식으로 stroage snapshot을 얻어내면 될 듯함.
 		if err != nil {
 			return common.Hash{}, err
 		}
