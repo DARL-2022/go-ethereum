@@ -1628,13 +1628,13 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 
 
 	// apply dirties to common.KeysToDelete (jmlee)
-	// for i := 0; i < len(s.KeysToDeleteDirty); i++ {
-	// 	fmt.Println("s.KeysToDeleteDirty[",i,"]:", s.KeysToDeleteDirty[i])
-	// }
+	for i := 0; i < len(s.KeysToDeleteDirty); i++ {
+		fmt.Println("s.KeysToDeleteDirty[",i,"]:", s.KeysToDeleteDirty[i])
+	}
 	common.KeysToDelete = append(common.KeysToDelete, s.KeysToDeleteDirty...)
-	// for i := 0; i < len(common.KeysToDelete); i++ {
-	// 	fmt.Println("common.KeysToDelete[",i,"]:", common.KeysToDelete[i])
-	// }
+	for i := 0; i < len(common.KeysToDelete); i++ {
+		fmt.Println("common.KeysToDelete[",i,"]:", common.KeysToDelete[i])
+	}
 
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
@@ -1656,8 +1656,17 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		s.DeletePreviousLeafNodes(common.KeysToDelete)
 
 		// reset common.KeysToDelete
-		common.KeysToDelete = make([]common.Hash, 0)
+		common.KeysToDelete = make([]common.Hash, 0) // -> not working (joonha)
 	}
+
+	// resetting is not working
+	// but why this is different from when not using the snapshot?
+
+	// (joonha) is debugging
+	for i := 0; i < len(common.KeysToDelete); i++ {
+		fmt.Println("^~^ common.KeysToDelete[",i,"]:", common.KeysToDelete[i])
+	}
+
 	// The onleaf func is called _serially_, so we can reuse the same account
 	// for unmarshalling every time.
 	var account types.StateAccount
