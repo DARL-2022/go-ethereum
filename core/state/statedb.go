@@ -663,12 +663,6 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
-
-	fmt.Println("\nupdateStateObject*************** BEFORE **************************")
-	zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
-	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	fmt.Println("********************************************************************\n")
-
 	// fmt.Println("updateStateObject() executed -> address:", obj.Address().Hex(), "/ nonce:", obj.Nonce(), "/ balance:", obj.Balance(), "/ addrHash:", obj.addrHash.Hex())
 
 	// Track the amount of time wasted on updating the account from the trie
@@ -789,12 +783,6 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	}
 	fmt.Println("(updateStateObject)(dirty)key is ", kii)
 
-
-	fmt.Println("\nupdateStateObject***************** AFTER *************************")
-	// zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
-	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	fmt.Println("********************************************************************\n")
-
 }
 
 // deleteStateObject removes the given object from the state trie.
@@ -836,12 +824,6 @@ func (s *StateDB) getStateObject_FromInactiveTrie(addr common.Address) *stateObj
 // flag set. This is needed by the state journal to revert to the correct s-
 // destructed object instead of wiping all knowledge about the state object.
 func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *stateObject {
-
-	// fmt.Println("\ngetDeletedStateObject********* BEFORE ****************************")
-	// zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
-	// fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	// fmt.Println("********************************************************************\n")
-
 
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
@@ -1045,15 +1027,6 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 	// Insert into the live set
 	obj := newObject(s, addr, *data)
 	s.setStateObject(obj)
-	// return obj
-
-
-	// fmt.Println("\ngetDeletedStateObject************* AFTER *************************")
-	// // zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
-	// fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	// fmt.Println("********************************************************************\n")
-
-
 	return obj
 }
 
@@ -1495,12 +1468,6 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 
-
-	fmt.Println("\nIntermediateRoot************* BEFORE *****************************")
-	zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
-	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	fmt.Println("********************************************************************\n")
-
 	// fmt.Println("state.IntermediateRoot() executed")
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
@@ -1520,10 +1487,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}()
 	}
 
-	fmt.Println("\nIntermediateRoot************* MIDDLE 1 ***************************")
-	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	fmt.Println("********************************************************************\n")
-
 	// Although naively it makes sense to retrieve the account trie and then do
 	// the contract storage and account updates sequentially, that short circuits
 	// the account prefetcher. Instead, let's process all the storage updates
@@ -1535,8 +1498,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 	}
 
-
-	fmt.Println("\nIntermediateRoot************* MIDDLE 2 ***************************")
+	// debugging (joonha)
+	zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	fmt.Println("\nIntermediateRoot************* MIDDLE 2 *****************************")
 	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
 	fmt.Println("********************************************************************\n")
 
@@ -1544,14 +1508,14 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
 	
-	// --> original code
+	// // --> original code (this hinders inactive node to be restored when snapshot is on) (joonha)
 	// if prefetcher != nil {
 	// 	if trie := prefetcher.trie(s.originalRoot); trie != nil {
 	// 		s.trie = trie
 	// 	}
 	// }
 
-	// (joonha)
+	// so activate this prefetching only when snapshot is off (joonha)
 	if s.snap == nil {
 		if prefetcher != nil {
 			if trie := prefetcher.trie(s.originalRoot); trie != nil {
@@ -1560,9 +1524,8 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 	}
 
-
-
-	fmt.Println("\nIntermediateRoot************* MIDDLE 3 ***************************")
+	// debugging (joonha)
+	fmt.Println("\nIntermediateRoot************* MIDDLE 3 *****************************")
 	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
 	fmt.Println("********************************************************************\n")
 
@@ -1579,10 +1542,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	}
 
 
-	fmt.Println("\nIntermediateRoot************* MIDDLE 4 ***************************")
-	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	fmt.Println("********************************************************************\n")
-
 
 	if prefetcher != nil {
 		prefetcher.used(s.originalRoot, usedAddrs)
@@ -1594,12 +1553,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	}
-
-
-	fmt.Println("\nnIntermediateRoot*********** AFTER *******************************")
-	// zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
-	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	fmt.Println("********************************************************************\n")
 
 
 	return s.trie.Hash()
@@ -1849,16 +1802,6 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		s.snap_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive = nil, nil, nil, nil
 	}
 
-
-
-
-	fmt.Println("///////////////////////////////////////")
-	fmt.Println("//   s.trie.TryGet_SetKey(key[:])    //")
-	zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
-	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	fmt.Println("///////////////////////////////////////")
-
-
 	return root, err
 }
 
@@ -1929,11 +1872,6 @@ func (s *StateDB) GetStateObjects() map[common.Address]*stateObject {
 // DeletePreviousLeafNodes deletes previous leaf nodes from state trie (jmlee)
 func (s *StateDB) DeletePreviousLeafNodes(keysToDelete []common.Hash) {
 
-	fmt.Println("\n************************** BEFORE **********************************")
-	zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
-	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	fmt.Println("********************************************************************\n")
-
 	fmt.Println("trie root before delete leaf nodes:", s.trie.Hash().Hex())
 	// delete previous leaf nodes from state trie
 	for i := 0; i < len(keysToDelete); i++ {
@@ -1943,11 +1881,6 @@ func (s *StateDB) DeletePreviousLeafNodes(keysToDelete []common.Hash) {
 		}
 	}
 	fmt.Println("trie root after delete leaf nodes:", s.trie.Hash().Hex())
-
-	fmt.Println("\n************************** AFTER ***********************************")
-	// zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
-	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	fmt.Println("********************************************************************\n")
 
 }
 
