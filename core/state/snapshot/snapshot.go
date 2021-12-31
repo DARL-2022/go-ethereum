@@ -355,6 +355,23 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	return nil
 }
 
+// StorageList_ethane returns storage snapshot list according the accountHash (joonha)
+func (t *Tree) StorageList_ethane(trieRoot, accountHash common.Hash) ([]common.Hash, bool) {
+	
+	snap := t.Snapshot(trieRoot)
+	diff, _ := snap.(*diffLayer)
+
+	return diff.StorageList(accountHash) // ref: difflayer.go
+}
+
+// AccountList_ethane returns all account snapshot list (joonha)
+func (t *Tree) AccountList_ethane(trieRoot common.Hash) []common.Hash {
+	snap := t.Snapshot(trieRoot)
+	diff, _ := snap.(*diffLayer)
+
+	return diff.AccountList() // ref: difflayer.go
+}
+
 // Cap traverses downwards the snapshot tree from a head block hash until the
 // number of allowed layers are crossed. All layers beyond the permitted number
 // are flattened downwards.
