@@ -25,7 +25,7 @@ fullnode = Web3(Web3.HTTPProvider("http://localhost:" + FULL_PORT))
 def main():
 
     # addr to restore
-    restoreAddr = "0x0000000000000000000000000000000000000002"
+    restoreAddr = "0x0000000000000000000000000000000000000003"
     print("joonha flag 0")
 
     # unlock coinbase

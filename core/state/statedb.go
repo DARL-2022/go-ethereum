@@ -1944,6 +1944,12 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 	// 2. move active storage snapshot to inactive storage snapshot
 	for _, key := range KeysToInactivate {
 
+		// 생각을 해보니, 여기서도 단순히 dirty 배열에서 가져오고 삭제하는 것이 아니라
+		// 아래 RebuildStorageTrieFromSnapshot 함수에서처럼 전체에서 검색하여 가져와야 될 것 같음.
+		// --> 그래야 inactive 영역의 snapshot도 반영이 될 듯.
+		// 지금은 참조할 것이 없어서 안 옮겨지고 있는 것 같음.
+		// 스냅샷 삭제는 어떻게 하는지 더 알아봐야 함. 
+
 		// add this to snapshot's delete list
 		var doExist bool
 		_, doExist = s.snapDestructs[key]
@@ -2031,11 +2037,11 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(addr common.Address, key common
 	if s.snap_inactive != nil {
 
 		// snapshot Account List
-		accountList := s.snaps.AccountList_ethane(trieRoot)
+		accountList := s.snaps_inactive.AccountList_ethane(trieRoot)
 		fmt.Println("RESTORING ACCOUNT LIST: ", accountList)	
 
 		// snapshot Storage List of the account
-		storageList, _ := s.snaps.StorageList_ethane(trieRoot, accountHash)
+		storageList, _ := s.snaps_inactive.StorageList_ethane(trieRoot, accountHash)
 		fmt.Println("RESTORING STORAGE LIST: ", storageList)	
 	}
 	
