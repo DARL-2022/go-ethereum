@@ -651,6 +651,12 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(obj *stateObject) {
+
+	fmt.Println("\nupdateStateObject*************** BEFORE **************************")
+	zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	fmt.Println("********************************************************************\n")
+
 	// fmt.Println("updateStateObject() executed -> address:", obj.Address().Hex(), "/ nonce:", obj.Nonce(), "/ balance:", obj.Balance(), "/ addrHash:", obj.addrHash.Hex())
 
 	// Track the amount of time wasted on updating the account from the trie
@@ -770,6 +776,13 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		ki = common.NoExistKey
 	}
 	fmt.Println("(updateStateObject)(dirty)key is ", kii)
+
+
+	fmt.Println("\nupdateStateObject***************** AFTER *************************")
+	// zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	fmt.Println("********************************************************************\n")
+
 }
 
 // deleteStateObject removes the given object from the state trie.
@@ -811,6 +824,13 @@ func (s *StateDB) getStateObject_FromInactiveTrie(addr common.Address) *stateObj
 // flag set. This is needed by the state journal to revert to the correct s-
 // destructed object instead of wiping all knowledge about the state object.
 func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *stateObject {
+
+	// fmt.Println("\ngetDeletedStateObject********* BEFORE ****************************")
+	// zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	// fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	// fmt.Println("********************************************************************\n")
+
+
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
@@ -1013,6 +1033,15 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 	// Insert into the live set
 	obj := newObject(s, addr, *data)
 	s.setStateObject(obj)
+	// return obj
+
+
+	// fmt.Println("\ngetDeletedStateObject************* AFTER *************************")
+	// // zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	// fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	// fmt.Println("********************************************************************\n")
+
+
 	return obj
 }
 
@@ -1448,6 +1477,13 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
+
+
+	fmt.Println("\nIntermediateRoot************* BEFORE *****************************")
+	zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	fmt.Println("********************************************************************\n")
+
 	// fmt.Println("state.IntermediateRoot() executed")
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
@@ -1466,6 +1502,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.prefetcher = nil
 		}()
 	}
+
+	fmt.Println("\nIntermediateRoot************* MIDDLE 1 ***************************")
+	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	fmt.Println("********************************************************************\n")
+
 	// Although naively it makes sense to retrieve the account trie and then do
 	// the contract storage and account updates sequentially, that short circuits
 	// the account prefetcher. Instead, let's process all the storage updates
@@ -1476,14 +1517,38 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			obj.updateRoot(s.db)
 		}
 	}
+
+
+	fmt.Println("\nIntermediateRoot************* MIDDLE 2 ***************************")
+	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	fmt.Println("********************************************************************\n")
+
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
-	if prefetcher != nil {
-		if trie := prefetcher.trie(s.originalRoot); trie != nil {
-			s.trie = trie
+	
+	// --> original code
+	// if prefetcher != nil {
+	// 	if trie := prefetcher.trie(s.originalRoot); trie != nil {
+	// 		s.trie = trie
+	// 	}
+	// }
+
+	// (joonha)
+	if s.snap == nil {
+		if prefetcher != nil {
+			if trie := prefetcher.trie(s.originalRoot); trie != nil {
+				s.trie = trie
+			}
 		}
 	}
+
+
+
+	fmt.Println("\nIntermediateRoot************* MIDDLE 3 ***************************")
+	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	fmt.Println("********************************************************************\n")
+
 	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; obj.deleted {
@@ -1493,6 +1558,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
 	}
+
+
+	fmt.Println("\nIntermediateRoot************* MIDDLE 4 ***************************")
+	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	fmt.Println("********************************************************************\n")
+
+
 	if prefetcher != nil {
 		prefetcher.used(s.originalRoot, usedAddrs)
 	}
@@ -1503,6 +1575,14 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	}
+
+
+	fmt.Println("\nnIntermediateRoot*********** AFTER *******************************")
+	// zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	fmt.Println("********************************************************************\n")
+
+
 	return s.trie.Hash()
 }
 
@@ -1631,11 +1711,12 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// decide whether to delete leaf nodes or not (jmlee)
 	// this might be needed for full sync
 	if common.DoDeleteLeafNode {
+		fmt.Println("\nDODELETELEAFNODE\n")
 		// delete previous leaf nodes from state trie
 		s.DeletePreviousLeafNodes(common.KeysToDelete)
 
 		// reset common.KeysToDelete
-		common.KeysToDelete = make([]common.Hash, 0) // -> not working (joonha)
+		common.KeysToDelete = make([]common.Hash, 0) // only works at the epoch
 	}
 
 	// resetting is not working
@@ -1811,6 +1892,12 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 
 // DeletePreviousLeafNodes deletes previous leaf nodes from state trie (jmlee)
 func (s *StateDB) DeletePreviousLeafNodes(keysToDelete []common.Hash) {
+
+	fmt.Println("\n************************** BEFORE **********************************")
+	zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	fmt.Println("********************************************************************\n")
+
 	fmt.Println("trie root before delete leaf nodes:", s.trie.Hash().Hex())
 	// delete previous leaf nodes from state trie
 	for i := 0; i < len(keysToDelete); i++ {
@@ -1820,6 +1907,12 @@ func (s *StateDB) DeletePreviousLeafNodes(keysToDelete []common.Hash) {
 		}
 	}
 	fmt.Println("trie root after delete leaf nodes:", s.trie.Hash().Hex())
+
+	fmt.Println("\n************************** AFTER ***********************************")
+	// zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	fmt.Println("********************************************************************\n")
+
 }
 
 // InactivateLeafNodes inactivates inactive accounts (i.e., move old leaf nodes to left) (jmlee)
