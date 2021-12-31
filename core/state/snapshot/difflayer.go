@@ -517,6 +517,7 @@ func (dl *diffLayer) AccountList() []common.Hash {
 	return dl.accountList
 }
 
+// flag (joonha)
 // StorageList returns a sorted list of all storage slot hashes in this diffLayer
 // for the given account. If the whole storage is destructed in this layer, then
 // an additional flag *destructed = true* will be returned, otherwise the flag is

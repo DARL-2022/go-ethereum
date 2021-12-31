@@ -2015,9 +2015,44 @@ func (s *StateDB) RemoveRestoredKeyFromAddrToKeyDirty_inactive(inactiveAddr comm
 // rebuild a storage trie when restoring using snapshot (joonha)
 func (s *StateDB) RebuildStorageTrieFromSnapshot(addr common.Address, key common.Hash) {
 
-	// core/state/snapshot/snapshot.go의 StorageIteratore를 활용.
-	// Storage Snapshot을 accountHash와 blockHash로 접근하여 얻어낼 수 있음.
-	// 그 후 storage trie를 재구축하고 s.snapStorage를 재구축하면 됨.
+	
+	fmt.Println("\n\n\nrebuilding storage trie starts")
+
+
+
+	/******************************************/
+	// GET NODE FROM SNAPSHOT
+	/******************************************/
+	// ref: core/state/snapshot/difflayer.go >> AccountList() & StorageList()
+
+	trieRoot := s.trie.Hash() // stateTrie's root
+	accountHash := key
+
+	if s.snap_inactive != nil {
+
+		// snapshot Account List
+		accountList := s.snaps.AccountList_ethane(trieRoot)
+		fmt.Println("RESTORING ACCOUNT LIST: ", accountList)	
+
+		// snapshot Storage List of the account
+		storageList, _ := s.snaps.StorageList_ethane(trieRoot, accountHash)
+		fmt.Println("RESTORING STORAGE LIST: ", storageList)	
+	}
+	
+	// --> 직접 확인을 해봐야 함. CA simulation.
+	// --> 우선 EOA도 구현해 봄.
+
+
+
+
+
+	/******************************************/
+	// REBUILD STORAGE TRIE
+	/******************************************/
+	
+	// k와 v를 state의 요소로부터 얻지 않고
+	// 위에서 만든 accountList와 storageList로부터 얻어야 함.
+	// 고로, 수정할 것.
 
 	// set storage retrieved from inactive storage snapshot
 	for k, v := range s.snapStorage_inactive[key] {
@@ -2030,10 +2065,13 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(addr common.Address, key common
 	}
 
 
-	// // add active account snapshot -> might be done in updateStateObject
-	// for k, v := range s.snapAccounts_inactive {
-	// 	s.snapAccounts[k] = v
-	// }
+	/******************************************/
+	// UPDATE SNAPSHOT
+	/******************************************/
+	// add active account snapshot -> might be done in updateStateObject
+	for k, v := range s.snapAccounts_inactive {
+		s.snapAccounts[k] = v
+	}
 	// add active storage snapshot
 	for k, v := range s.snapStorage_inactive {
 		temp := make(map[common.Hash][]byte)
@@ -2042,14 +2080,12 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(addr common.Address, key common
 		}
 		s.snapStorage[k] = temp
 	}
-
-
 	// delete inactive snapshot
 	delete(s.snapStorage_inactive, key) // delete this from snapshot's update list
 	delete(s.snapAccounts_inactive, key) // delete this from snapshot's update list
 	s.snapDestructs_inactive[key] = struct{}{}
 
-	fmt.Println("rebuilding storage trie done")
-}
 
-// commit test
+
+	fmt.Println("rebuilding storage trie done\n\n\n")
+}
