@@ -690,7 +690,15 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	addrKey_bigint.SetString(addrKey.Hex()[2:], 16)
 	// fmt.Println("addrKey_bigint:", addrKey_bigint.Int64(), "/ CheckpointKey:", s.CheckpointKey)
 	
+
+	// 여기를 좀 더 명확하게 만들 것.
 	if addrKey_bigint.Int64() >= s.CheckpointKey {
+		fmt.Println("\n\nupdateStateObject ----------> first case\n\n")
+		/******************************************************/
+		// UPDATED AT THIS EPOCH
+		/******************************************************/
+		// 기존 것을 지우지도 않고, 옮기지도 않는 것인데 왜 우측에 새로 추가가 되고 있지?
+
 		// this address is newly created address OR already moved address. so just update
 		// fmt.Println("insert -> key:", addrKey.Hex(), "/ addr:", addr.Hex())
 		if err = s.trie.TryUpdate_SetKey(addrKey[:], data); err != nil {
@@ -698,6 +706,13 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		}
 
 	} else if addrKey_bigint.Int64() >= common.InactiveBoundaryKey {
+		fmt.Println("\n\nupdateStateObject ----------> second case\n\n")
+		/******************************************************/
+		// ACTIVE AT PREVIOUS EPOCH BUT NOT INACTIVATED YET
+		/******************************************************/
+		// 기존 것은 epoch 마다 지우겠다고 선언하고
+		// 맨 우측에 새로 추가를 하는 것임. 다 이 경우에 해당되고 있는 것인가 그러면?
+
 		// this address is already in the trie, so move the previous leaf node to the right side (delete & insert)
 
 		// do not delete this now, just append s.KeysToDeleteDirty to delete them at once later (periodical delete)
@@ -724,6 +739,10 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		s.NextKey += 1
 
 	} else { // < InactiveBoundaryKey : creating a crumb or restoring (joonha) 
+		fmt.Println("\n\nupdateStateObject ----------> third case\n\n")
+		/***********************************************************/
+		// HAD BEEN INACTIVATED SO THIS SEEMS NEW TO ACTIVE TRIE
+		/***********************************************************/
 
 		// deleting prev(inactive)Account snapshot occurs in RebuildStorageTrieFromSnapshot
 		s.KeysToDeleteDirty = append(s.KeysToDeleteDirty, addrKey) // 했는데 여기서 또 다시?
@@ -1993,12 +2012,12 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			s.snapDestructs[key] = struct{}{}
 		}
 
-		// // we don't need inactive account snapshot, but in case of storage depending on account, move accounts to inactive snapshot Tree
-		// // if commenting this part out doesn't occur err, comment out for memory optimization.
-		// s.snapAccounts_inactive = make(map[common.Hash][]byte) // append가 아니고 매 state마다 위로 차곡차곡 쌓는 형식 (diffLayers vary)
-		// for k, v := range s.snapAccounts {
-		// 	s.snapAccounts_inactive[k] = v
-		// }
+		// we don't need inactive account snapshot, but in case of storage depending on account, move accounts to inactive snapshot Tree
+		// if commenting this part out doesn't occur err, comment out for memory optimization.
+		s.snapAccounts_inactive = make(map[common.Hash][]byte) // append가 아니고 매 state마다 위로 차곡차곡 쌓는 형식 (diffLayers vary)
+		for k, v := range s.snapAccounts {
+			s.snapAccounts_inactive[k] = v
+		}
 
 		// move storage snapshot to inactive snapshot Tree
 		if s.snap_inactive != nil {
