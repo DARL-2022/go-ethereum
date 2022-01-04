@@ -1517,11 +1517,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 	}
 
-	// debugging (joonha)
-	zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
-	fmt.Println("\nIntermediateRoot************* MIDDLE 2 *****************************")
-	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	fmt.Println("********************************************************************\n")
+	// // debugging (joonha)
+	// zebal := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	// fmt.Println("\nIntermediateRoot************* MIDDLE 2 *****************************")
+	// fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	// fmt.Println("********************************************************************\n")
 
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
@@ -1543,10 +1543,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 	}
 
-	// debugging (joonha)
-	fmt.Println("\nIntermediateRoot************* MIDDLE 3 *****************************")
-	fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
-	fmt.Println("********************************************************************\n")
+	// // debugging (joonha)
+	// fmt.Println("\nIntermediateRoot************* MIDDLE 3 *****************************")
+	// fmt.Println(s.trie.TryGet_SetKey(zebal[:]))
+	// fmt.Println("********************************************************************\n")
 
 	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
 	for addr := range s.stateObjectsPending {
