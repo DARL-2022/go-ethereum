@@ -200,17 +200,24 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 	// pos: pointer pointing each digit of the key (related to the trie depth)
 	/****************************************************************************/
 
-	// commit test 2
+	// n.Key : n's key -> 전체가 아님. 특히 숏노드의 경우, 그 짧은 공통 부분만을 키로 가지고 있음.
+	// key = firstKey
+	// n : encountered node
 
 	switch n := (origNode).(type) {
 	case nil:
+		fmt.Println("NODE IS NIL")
 		return nil, nil, false, nil
-	case valueNode: // leaf node		
+	case valueNode: // leaf node
+		fmt.Println("VALUENODE")
 		// in this case, should archive the node into the result array
 		if n != nil {
 
 			// found non-nil account
 			Accounts = append(Accounts, n)
+			fmt.Println("detected account: ", common.BytesToAddress(n))
+
+			fmt.Println("1. key is", key)
 
 			// key of that account
 			k := big.NewInt(0)
@@ -218,30 +225,39 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 				k = k.Add(k, big.NewInt(int64(math.Pow(16, float64(i)) * float64(key[len(key[:pos-1]) - i - 1]))))
 			}
 			hk := common.BigToHash(k)
-			fmt.Println("hk is ", hk)
+			fmt.Println("2. hk is ", hk)
 			Keys = append(Keys, hk)
 
 			// delete the account
 			t.TryUpdate(hk[:], nil)
-			fmt.Println("k is ", hk[:])
+			fmt.Println("3. k is ", hk[:])
 
 			n = nil
 		}
+		fmt.Println("\n\n")
 
 		return n, n, false, nil
 	case *shortNode:
-		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
-			// key not found in trie
-			return nil, n, false, nil
+		fmt.Println("SHORTNODE")
+		fmt.Println("shortNode n.Key is ", n.Key)
+		fmt.Println("shortNode key length is ", len(n.Key))
+
+		// shortNode Key copy from n.Key to key
+		// direct key edit affects other nodes, so use tempKey
+		tempKey := make([]byte, len(key))
+		copy(tempKey, key)
+		for i := 0; i < len(n.Key); i++ {
+			tempKey[pos+i] = n.Key[i]
 		}
-		
-		value, newnode, didResolve, err = t.tryGetAll(n.Val, key, lastKey, pos+len(n.Key))
+
+		value, newnode, didResolve, err = t.tryGetAll(n.Val, tempKey, lastKey, pos+len(n.Key))
 		if err == nil && didResolve {
 			n = n.copy()
 			n.Val = newnode
 		}
 		return value, n, didResolve, err 
-	case *fullNode: 	
+	case *fullNode:
+		fmt.Println("FULLNODE")	
 		// (original code) 기존에는 해당하는 pos 밑으로만 내려감.
 		// value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
 
@@ -250,9 +266,12 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 
 			// 만약 lastKey를 넘어가면 탐색 종료
 			if bytes.Compare(key, lastKey) >= 0 { // key >= lastKey
+				fmt.Println("key >= lastKey")
 				break;
 			}
 
+			fmt.Println("fullNode key is ", key)
+			fmt.Println("key[pos] is ", key[pos])
 			value, newnode, didResolve, err = t.tryGetAll(n.Children[i], key, lastKey, pos+1)
 			
 			// 해당 자릿수에서 탐색 타깃을 변경
@@ -271,6 +290,8 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 		}
 		return value, n, didResolve, err
 	case hashNode:
+		fmt.Println("HASHNODE")
+		fmt.Println("hashNode key is ", key)
 		child, err := t.resolveHash(n, key[:pos])
 		if err != nil {
 			return nil, n, true, err
