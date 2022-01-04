@@ -200,6 +200,8 @@ func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []b
 	// pos: pointer pointing each digit of the key (related to the trie depth)
 	/****************************************************************************/
 
+	// commit test 2
+
 	switch n := (origNode).(type) {
 	case nil:
 		return nil, nil, false, nil
