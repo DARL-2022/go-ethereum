@@ -1804,8 +1804,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			fmt.Println("root: ", root, "\n\n")
 
 			if parent_inactive := s.snap_inactive.Root(); parent_inactive != root {
-				// TODO(joonha): snapAccount_inactive는 없을텐데... nil을 넘겨줘도 되는 건가? 그래도 되면 저장 효율을 위해 nil을 넘겨줄 것.
-				if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, nil, s.snapStorage_inactive); err != nil {
+				// TODO(joonha): snapAccount_inactive는 없을테니 추후 저장 효율을 위해 nil을 넘겨줄 것.
+				if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive); err != nil {
 					log.Warn("Failed to update snapshot tree", "from", parent_inactive, "to", root, "err", err)
 				}
 				if err := s.snaps_inactive.Cap(root, 128); err != nil {
@@ -1971,14 +1971,14 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", keyToInsert[:], err))
 		} else {
 			// (joonha)
-			fmt.Println("joonha 1")
+			// fmt.Println("joonha 1")
 			
 			// apply inactivation result to AddrToKey 
 			// Q. Should this be applied to AddrToKey_Dirty?
 			common.AddrToKey[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
 			s.AddrToKeyDirty[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
 			
-			fmt.Println("joonha 4")
+			// fmt.Println("joonha 4")
 
 			// save the inactive account key info for later restoration 
 			_, doExist := s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])]
@@ -1997,13 +1997,9 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 	// this part does two things.
 	// 1. delete active snapshot
 	// 2. move active storage snapshot to inactive storage snapshot
-	for _, key := range KeysToInactivate {
-
-		// 생각을 해보니, 여기서도 단순히 dirty 배열에서 가져오고 삭제하는 것이 아니라
-		// 아래 RebuildStorageTrieFromSnapshot 함수에서처럼 전체에서 검색하여 가져와야 될 것 같음.
-		// --> 그래야 inactive 영역의 snapshot도 반영이 될 듯.
-		// 지금은 참조할 것이 없어서 안 옮겨지고 있는 것 같음.
-		// 스냅샷 삭제는 어떻게 하는지 더 알아봐야 함. 
+	fmt.Println("joonha 1")
+	for _, key := range KeysToInactivate { // 근데 애초에 key로 접근하는 것은 맞는가?
+		fmt.Println("joonha 2")
 
 		// add this to snapshot's delete list
 		var doExist bool
@@ -2011,30 +2007,46 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		if doExist {
 			s.snapDestructs[key] = struct{}{}
 		}
+		fmt.Println("joonha 3")
 
 		// we don't need inactive account snapshot, but in case of storage depending on account, move accounts to inactive snapshot Tree
 		// if commenting this part out doesn't occur err, comment out for memory optimization.
-		s.snapAccounts_inactive = make(map[common.Hash][]byte) // append가 아니고 매 state마다 위로 차곡차곡 쌓는 형식 (diffLayers vary)
-		for k, v := range s.snapAccounts {
-			s.snapAccounts_inactive[k] = v
-		}
+		s.snapAccounts_inactive = make(map[common.Hash][]byte)
+		acc, _ := s.snap.AccountRLP(key)
+		fmt.Println("### acc: ", acc) // --> 이것이 잘 출력되는 것으로 보아 AccountList_ethane과 StorageList_ethane의 문제인 듯싶다. (혹은 s.trie.Hash()를 보내는 것이 아니거나.)
+		s.snapAccounts_inactive[key] = acc
+		fmt.Println("joonha 4")
+
+		// 필요는 없지만 확인을 위해 여기서도 accountList를 만들어 보자.
+		accountList := s.snaps.AccountList_ethane(s.trie.Hash())
+		fmt.Println("accountList: ", accountList)
+		fmt.Println("joonha 4-1")
+
 
 		// move storage snapshot to inactive snapshot Tree
-		if s.snap_inactive != nil {
-		// if common.UsingInactiveStorageSnapshot == 1 {
-			s.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
-			for k, v := range s.snapStorage {
-				temp := make(map[common.Hash][]byte)
-				for kk, vv := range v {
-					temp[kk] = vv
-				}
-				s.snapStorage_inactive[k] = temp
-			}
+		s.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
+		fmt.Println("joonha 5")
+		slotKeyList := s.snaps.StorageList_ethane(s.trie.Hash(), key) // nil...
+		// 윗줄 slotKey 얻을 때, s.trie.Hash()를 보내는 것이 틀린 건가?
+		fmt.Println("slotKeyList: ", slotKeyList)
+		fmt.Println("joonha 6")
+		temp := make(map[common.Hash][]byte)
+		for slotKey := range slotKeyList { // int
+			fmt.Println("joonha 7")
+			slotKey_hash := common.Int64ToHash(int64(slotKey))
+			v, _ := s.snap.Storage(key, slotKey_hash) // slot value
+			temp[slotKey_hash] = v
 		}
+		fmt.Println("joonha 8")
+		s.snapStorage_inactive[key] = temp
+
+		fmt.Println("joonha 9")	
 
 		delete(s.snapAccounts, key) // delete this from snapshot's update list
 		delete(s.snapStorage, key) // delete this from snapshot's update list
 	}
+
+	fmt.Println("joonha 10")
 
 	// TODO(joonha) should delete intermediate nodes from the disk ()
 
@@ -2092,11 +2104,23 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(addr common.Address, key common
 	if s.snap_inactive != nil {
 
 		// snapshot Account List
-		accountList := s.snaps_inactive.AccountList_ethane(trieRoot)
-		fmt.Println("RESTORING ACCOUNT LIST: ", accountList)	
+		accountList := s.snaps_inactive.AccountList_ethane(trieRoot) // TODO: 이전 블록의 trieRoot를 넘겨야 할 듯.
+		fmt.Println("RESTORING ACCOUNT LIST: ", accountList) // key? addr?	
+		
+		// one account
+		if account, err := s.snap_inactive.Account(accountHash); err == nil {
+			fmt.Println("RESTORING ACCOUNT: ", account)
+			if account != nil {
+				fmt.Println("ACCOUNT ADDR: ", account.Addr)
+				fmt.Println("ACCOUNT Balance: ", account.Balance)
+			}
+		} 
+
+		acc := s.snaps_inactive.GetAccountFromSnapshots(accountHash, trieRoot, false) // false: find from disk, true: do not find from disk
+		fmt.Println("### acc: ", acc)
 
 		// snapshot Storage List of the account
-		storageList, _ := s.snaps_inactive.StorageList_ethane(trieRoot, accountHash)
+		storageList := s.snaps_inactive.StorageList_ethane(trieRoot, accountHash)
 		fmt.Println("RESTORING STORAGE LIST: ", storageList)	
 	}
 	
@@ -2107,44 +2131,44 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(addr common.Address, key common
 
 
 
-	/******************************************/
-	// REBUILD STORAGE TRIE
-	/******************************************/
+	// /******************************************/
+	// // REBUILD STORAGE TRIE
+	// /******************************************/
 	
-	// k와 v를 state의 요소로부터 얻지 않고
-	// 위에서 만든 accountList와 storageList로부터 얻어야 함.
-	// 고로, 수정할 것.
+	// // k와 v를 state의 요소로부터 얻지 않고
+	// // 위에서 만든 accountList와 storageList로부터 얻어야 함.
+	// // 고로, 수정할 것.
 
-	// set storage retrieved from inactive storage snapshot
-	for k, v := range s.snapStorage_inactive[key] {
-		s.SetState_Restore(addr, k, common.BytesToHash(v))
-	}
-	// delete inactive storage from memory (not from disk)
-	var p common.Hash // nil
-	for k, _ := range s.snapStorage_inactive[key] {
-		s.SetState_Restore(addr, k, p)
-	}
+	// // set storage retrieved from inactive storage snapshot
+	// for k, v := range s.snapStorage_inactive[key] {
+	// 	s.SetState_Restore(addr, k, common.BytesToHash(v))
+	// }
+	// // delete inactive storage from memory (not from disk)
+	// var p common.Hash // nil
+	// for k, _ := range s.snapStorage_inactive[key] {
+	// 	s.SetState_Restore(addr, k, p)
+	// }
 
 
-	/******************************************/
-	// UPDATE SNAPSHOT
-	/******************************************/
-	// add active account snapshot -> might be done in updateStateObject
-	for k, v := range s.snapAccounts_inactive {
-		s.snapAccounts[k] = v
-	}
-	// add active storage snapshot
-	for k, v := range s.snapStorage_inactive {
-		temp := make(map[common.Hash][]byte)
-		for kk, vv := range v {
-			temp[kk] = vv
-		}
-		s.snapStorage[k] = temp
-	}
-	// delete inactive snapshot
-	delete(s.snapStorage_inactive, key) // delete this from snapshot's update list
-	delete(s.snapAccounts_inactive, key) // delete this from snapshot's update list
-	s.snapDestructs_inactive[key] = struct{}{}
+	// /******************************************/
+	// // UPDATE SNAPSHOT
+	// /******************************************/
+	// // add active account snapshot -> might be done in updateStateObject
+	// for k, v := range s.snapAccounts_inactive {
+	// 	s.snapAccounts[k] = v
+	// }
+	// // add active storage snapshot
+	// for k, v := range s.snapStorage_inactive {
+	// 	temp := make(map[common.Hash][]byte)
+	// 	for kk, vv := range v {
+	// 		temp[kk] = vv
+	// 	}
+	// 	s.snapStorage[k] = temp
+	// }
+	// // delete inactive snapshot
+	// delete(s.snapStorage_inactive, key) // delete this from snapshot's update list
+	// delete(s.snapAccounts_inactive, key) // delete this from snapshot's update list
+	// s.snapDestructs_inactive[key] = struct{}{}
 
 
 
