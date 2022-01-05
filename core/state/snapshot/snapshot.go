@@ -319,6 +319,52 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 	return ret
 }
 
+// GetAccountFromSnapshots returns found account traversing the diffLayers + diskLayer(optional) (joonha)
+func (t *Tree) GetAccountFromSnapshots(accountHash, root common.Hash, /*limits int, */nodisk bool) *Account {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	// if limits == 0 {
+	// 	return nil
+	// }
+	layer := t.layers[root]
+	if layer == nil {
+		return nil
+	}
+	for {
+		var isdisk bool
+		if _, isdisk = layer.(*diskLayer); isdisk && nodisk {
+			break
+		}
+		// limits -= 1
+		// if limits == 0 {
+		// 	break
+		// }
+		parent := layer.Parent()
+		if parent == nil {
+			break
+		}
+
+		// try to find the account (joonha)
+		if !isdisk { // diffLayer
+			diff, _ := layer.(*diffLayer)
+			acc, _ := diff.Account(accountHash)
+			if acc != nil {
+				return acc
+			}
+		} else { // diskLayer
+			disk, _ := layer.(*diskLayer)
+			acc, _ := disk.Account(accountHash)
+			if acc != nil {
+				return acc
+			}
+		}
+
+		layer = parent
+	}
+	return nil
+}
+
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
 func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
@@ -347,20 +393,35 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 }
 
 // StorageList_ethane returns storage snapshot list according the accountHash (joonha)
-func (t *Tree) StorageList_ethane(trieRoot, accountHash common.Hash) ([]common.Hash, bool) {
+func (t *Tree) StorageList_ethane(trieRoot, accountHash common.Hash) []common.Hash {
 	
-	snap := t.Snapshot(trieRoot)
-	diff, _ := snap.(*diffLayer)
+	// snap := t.Snapshot(trieRoot)
+	// diff, _ := snap.(*diffLayer)
+	// return diff.StorageList(accountHash) // ref: difflayer.go
 
-	return diff.StorageList(accountHash) // ref: difflayer.go
+	var storageList []common.Hash
+	for _, snap := range t.Snapshots(trieRoot, 300, true) { // whether to find in diskLayer
+		diff, _ := snap.(*diffLayer)
+		val, _ := diff.StorageList(accountHash)
+		storageList = append(storageList, val...)
+	}
+	return storageList
 }
 
-// AccountList_ethane returns all account snapshot list (joonha)
+// AccountList_ethane returns all account snapshot list 
+// traversing whole snapshot (diff + disk(optional)) (joonha) --> KEY or ADDR ?
 func (t *Tree) AccountList_ethane(trieRoot common.Hash) []common.Hash {
-	snap := t.Snapshot(trieRoot)
-	diff, _ := snap.(*diffLayer)
+	// snap := t.Snapshot(trieRoot)
+	// diff, _ := snap.(*diffLayer)
+	// return diff.AccountList() // ref: difflayer.go
 
-	return diff.AccountList() // ref: difflayer.go
+	var accountList []common.Hash
+	for _, snap := range t.Snapshots(trieRoot, 300, true) { // whether to find in diskLayer
+		diff, _ := snap.(*diffLayer)
+		val := diff.AccountList()
+		accountList = append(accountList, val...)
+	}
+	return accountList
 }
 
 // Cap traverses downwards the snapshot tree from a head block hash until the
