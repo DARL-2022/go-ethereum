@@ -1923,46 +1923,46 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 	// TODO: optimize this code, this is too naive -> done by DFS (joonha)
 	// normTrie := s.trie.GetTrie() // TODO: using this function, we can delete SecureTrie.***_SetKey functions
 	
-	// // NAIVE solution 
-	// AccountsToInactivate := make([][]byte, 0)
-	// KeysToInactivate := make([]common.Hash, 0)
-	// for i := inactiveBoundaryKey; i < lastKeyToCheck; i++ {
-	// 	// check there is leaf node with this key
-	// 	hash := common.Int64ToHash(i)
+	// NAIVE solution 
+	AccountsToInactivate := make([][]byte, 0)
+	KeysToInactivate := make([]common.Hash, 0)
+	for i := inactiveBoundaryKey; i < lastKeyToCheck; i++ {
+		// check there is leaf node with this key
+		hash := common.Int64ToHash(i)
 
-	// 	// leafNode, err := normTrie.TryGet(hash[:]) // original code by jmlee
-	// 	leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
+		// leafNode, err := normTrie.TryGet(hash[:]) // original code by jmlee
+		leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
 
-	// 	// find inactive leaf node, append the key to the list
-	// 	if leafNode != nil && err == nil {
-	// 		fmt.Println("O: there is a leaf node at key", hash.Hex())
-	// 		AccountsToInactivate = append(AccountsToInactivate, leafNode)
-	// 		KeysToInactivate = append(KeysToInactivate, hash)
-	// 	} else {
-	// 		fmt.Println("X: there is no leaf node at key", hash.Hex())
-	// 	}
-	// }
+		// find inactive leaf node, append the key to the list
+		if leafNode != nil && err == nil {
+			fmt.Println("O: there is a leaf node at key", hash.Hex())
+			AccountsToInactivate = append(AccountsToInactivate, leafNode)
+			KeysToInactivate = append(KeysToInactivate, hash)
+		} else {
+			fmt.Println("X: there is no leaf node at key", hash.Hex())
+		}
+	}
 
-	// DFS the non-nil account from the trie (joonha)
-	// secure_trie.go/TryGetAll_SetKey -> trie.go/TryGetAll -> trie.go/tryGetAll
-	firstKey := common.Int64ToHash(inactiveBoundaryKey)
-	lastKey := common.Int64ToHash(lastKeyToCheck)
-	AccountsToInactivate, KeysToInactivate, _ := s.trie.TryGetAll_SetKey(firstKey[:], lastKey[:])
+	// // DFS the non-nil account from the trie (joonha)
+	// // secure_trie.go/TryGetAll_SetKey -> trie.go/TryGetAll -> trie.go/tryGetAll
+	// firstKey := common.Int64ToHash(inactiveBoundaryKey)
+	// lastKey := common.Int64ToHash(lastKeyToCheck)
+	// AccountsToInactivate, KeysToInactivate, _ := s.trie.TryGetAll_SetKey(firstKey[:], lastKey[:])
 
 	fmt.Println("Accounts length: ", len(AccountsToInactivate))
 	fmt.Println("Keys length: ", len(KeysToInactivate))
 
 	// move inactive leaf nodes to left
-	for index, _ := range KeysToInactivate { // DFS
-	// for index, key := range KeysToInactivate { // naive
+	// for index, _ := range KeysToInactivate { // DFS
+	for index, key := range KeysToInactivate { // naive
 
-		// // comment out when DFS
-		// // delete inactive leaf node --> changed to deleting during DFS (joonha)
-		// fmt.Println("delete previous leaf node -> key:", key.Hex())
-		// fmt.Println("delete previous leaf node -> key:", key[:])
-		// if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
-		// 	s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
-		// }
+		// comment out when DFS
+		// delete inactive leaf node --> changed to deleting during DFS (joonha)
+		fmt.Println("delete previous leaf node -> key:", key.Hex())
+		fmt.Println("delete previous leaf node -> key:", key[:])
+		if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
+			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
+		}
 
 		// insert inactive leaf node to left
 		keyToInsert := common.Int64ToHash(inactiveBoundaryKey + int64(index))
