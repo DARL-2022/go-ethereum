@@ -90,7 +90,7 @@ type StateDB interface {
 	CreateAccount_withBlockNum(common.Address, *big.Int)
 	UpdateAlreadyRestoredDirty(common.Hash)
 	RemoveRestoredKeyFromAddrToKeyDirty_inactive(common.Address)
-	RebuildStorageTrieFromSnapshot(common.Address, common.Hash)
+	RebuildStorageTrieFromSnapshot(common.Hash, common.Address, common.Hash)
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

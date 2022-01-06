@@ -23,7 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"fmt"
+	// "fmt"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
@@ -1005,11 +1005,9 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// inactivate inactive accounts (jmlee)
 	if header.Number.Int64() % common.InactivateLeafNodeEpoch == 0 {
 		lastKeyToCheck := common.CheckpointKeys[header.Number.Int64()-common.InactivateCriterion+1]
-		inactivatedAccountsNum := w.current.state.InactivateLeafNodes(common.InactiveBoundaryKey, lastKeyToCheck)
+		inactivatedAccountsNum := w.current.state.InactivateLeafNodes(header.ParentHash, common.InactiveBoundaryKey, lastKeyToCheck)
 		common.InactiveBoundaryKey += inactivatedAccountsNum
 	}
-
-	fmt.Println("reaching here, ,,,,") // (joonha)
 
 	w.commit(uncles, w.fullTaskHook, true, tstart)
 }
