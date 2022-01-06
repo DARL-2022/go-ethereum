@@ -776,9 +776,11 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// at transaction boundary level to ensure we capture state clearing.
 	if s.snap != nil {
 		// fmt.Println("addr:", obj.Address().Hex(), "update snapAccounts -> addrKey:", obj.addrHash.Hex())
-		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash) // flag(joonha) 스냅샷을 생성
+		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash, addr) // flag(joonha) 스냅샷을 생성
+		fmt.Println("\n>>> snapshot.SlimAccountRLP( ): ", s.snapAccounts[obj.addrHash], "\n")
 		// snapStorage는 업데이트 안하나...?
 		// snapStorage는 어디서 어떻게 저장하는가?
+		// storage는 state_object.go에서 하는 것 같음.
 
 		// 새 키로 스냅샷을 만든 거니까, 이전 키의 스냅샷은 삭제해줘야 함. 단, key 업데이트 없는 경우는 제외. (joonha)
 		// 이는 기존 geth와 달리 compactMPT에서는 스냅샷의 value 뿐 아니라 key 도 바뀌기 때문임.
@@ -1904,7 +1906,7 @@ func (s *StateDB) DeletePreviousLeafNodes(keysToDelete []common.Hash) {
 }
 
 // InactivateLeafNodes inactivates inactive accounts (i.e., move old leaf nodes to left) (jmlee)
-func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64) int64 {
+func (s *StateDB) InactivateLeafNodes(blockRoot common.Hash, inactiveBoundaryKey, lastKeyToCheck int64) int64 {
 
 	// TODO(joonha): when inactivate accounts, 
 	// 1. destroy active snapshot (account + slots): snapDestructs 을 이용하면 될 것 같음. 추후 Commit에서 반영되도록.
@@ -1991,43 +1993,30 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			fmt.Println("s.AddrToKeyDirty_inactive is ", s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])])
 			fmt.Println("acc: ", common.BytesToAddress(AccountsToInactivate[index]))
 		}
-	}
-	
-	// (joonha)
-	// this part does two things.
-	// 1. delete active snapshot
-	// 2. move active storage snapshot to inactive storage snapshot
-	fmt.Println("joonha 1")
-	for _, key := range KeysToInactivate { // 근데 애초에 key로 접근하는 것은 맞는가?
-		fmt.Println("joonha 2")
 
-		// add this to snapshot's delete list
-		var doExist bool
-		_, doExist = s.snapDestructs[key]
-		if doExist {
-			s.snapDestructs[key] = struct{}{}
-		}
-		fmt.Println("joonha 3")
-
+		/*****************************/
+		// SNAPSHOT
+		/*****************************/
+		// this part does two things.
+		// 1. move active storage snapshot to inactive storage snapshot		
+		// 2. delete active snapshot
+		
+		// ACCOUNT: 
 		// we don't need inactive account snapshot, but in case of storage depending on account, move accounts to inactive snapshot Tree
 		// if commenting this part out doesn't occur err, comment out for memory optimization.
-		s.snapAccounts_inactive = make(map[common.Hash][]byte)
+		// s.snapAccounts_inactive = make(map[common.Hash][]byte)
 		acc, _ := s.snap.AccountRLP(key)
-		fmt.Println("### acc: ", acc) // --> 이것이 잘 출력되는 것으로 보아 AccountList_ethane과 StorageList_ethane의 문제인 듯싶다. (혹은 s.trie.Hash()를 보내는 것이 아니거나.)
-		s.snapAccounts_inactive[key] = acc
-		fmt.Println("joonha 4")
-
-		// 필요는 없지만 확인을 위해 여기서도 accountList를 만들어 보자.
-		accountList := s.snaps.AccountList_ethane(s.trie.Hash())
-		fmt.Println("accountList: ", accountList)
-		fmt.Println("joonha 4-1")
+		fmt.Println("### acc: ", acc)
+		s.snapAccounts_inactive[keyToInsert] = acc
+		fmt.Println("s.snapAccounts_inactive[keyToInsert]: ", s.snapAccounts_inactive[keyToInsert])
+		fmt.Println(">>> key is ", keyToInsert)
 
 
-		// move storage snapshot to inactive snapshot Tree
-		s.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
+		// STORAGE:
+		CAKey := common.HexToHash("0x000000000000000000000000000000000000000000000000000000000000000a") // CA key
 		fmt.Println("joonha 5")
-		slotKeyList := s.snaps.StorageList_ethane(s.trie.Hash(), key) // nil...
-		// 윗줄 slotKey 얻을 때, s.trie.Hash()를 보내는 것이 틀린 건가?
+		fmt.Println("blockRoot: ", blockRoot)
+		slotKeyList := s.snaps.StorageList_ethane(blockRoot, CAKey) // blockRoot로 변경해야함.
 		fmt.Println("slotKeyList: ", slotKeyList)
 		fmt.Println("joonha 6")
 		temp := make(map[common.Hash][]byte)
@@ -2038,12 +2027,13 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			temp[slotKey_hash] = v
 		}
 		fmt.Println("joonha 8")
-		s.snapStorage_inactive[key] = temp
+		s.snapStorage_inactive[keyToInsert] = temp
 
-		fmt.Println("joonha 9")	
 
-		delete(s.snapAccounts, key) // delete this from snapshot's update list
-		delete(s.snapStorage, key) // delete this from snapshot's update list
+		// DELETE:
+		s.snapDestructs[key] = struct{}{}
+		delete(s.snapAccounts, key)
+		delete(s.snapStorage, key)
 	}
 
 	fmt.Println("joonha 10")
@@ -2086,7 +2076,7 @@ func (s *StateDB) RemoveRestoredKeyFromAddrToKeyDirty_inactive(inactiveAddr comm
 }
 
 // rebuild a storage trie when restoring using snapshot (joonha)
-func (s *StateDB) RebuildStorageTrieFromSnapshot(addr common.Address, key common.Hash) {
+func (s *StateDB) RebuildStorageTrieFromSnapshot(rootHash common.Hash, addr common.Address, key common.Hash) {
 
 	
 	fmt.Println("\n\n\nrebuilding storage trie starts")
@@ -2098,30 +2088,42 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(addr common.Address, key common
 	/******************************************/
 	// ref: core/state/snapshot/difflayer.go >> AccountList() & StorageList()
 
-	trieRoot := s.trie.Hash() // stateTrie's root
+	// param rootHash <- blockRoot
 	accountHash := key
 
 	if s.snap_inactive != nil {
 
-		// snapshot Account List
-		accountList := s.snaps_inactive.AccountList_ethane(trieRoot) // TODO: 이전 블록의 trieRoot를 넘겨야 할 듯.
-		fmt.Println("RESTORING ACCOUNT LIST: ", accountList) // key? addr?	
+		// snaps_inactive Account List
+		accountList := s.snaps_inactive.AccountList_ethane(rootHash) // handing in blockRoot
+		fmt.Println("RESTORING ACCOUNT LIST: ", accountList) // key
 		
-		// one account
-		if account, err := s.snap_inactive.Account(accountHash); err == nil {
+		// get Account from snap_inactive 
+		if account, err := s.snap_inactive.Account(accountHash); err == nil { // get account by key
 			fmt.Println("RESTORING ACCOUNT: ", account)
 			if account != nil {
 				fmt.Println("ACCOUNT ADDR: ", account.Addr)
 				fmt.Println("ACCOUNT Balance: ", account.Balance)
 			}
 		} 
+		// acc := s.snaps_inactive.GetAccountFromSnapshots(accountHash, rootHash, false) // false: find from disk, true: do not find from disk
+		// fmt.Println("### acc: ", acc)
 
-		acc := s.snaps_inactive.GetAccountFromSnapshots(accountHash, trieRoot, false) // false: find from disk, true: do not find from disk
-		fmt.Println("### acc: ", acc)
 
-		// snapshot Storage List of the account
-		storageList := s.snaps_inactive.StorageList_ethane(trieRoot, accountHash)
+		// snaps_inactive Storage List of the account
+		storageList := s.snaps_inactive.StorageList_ethane(rootHash, accountHash)
 		fmt.Println("RESTORING STORAGE LIST: ", storageList)	
+		// 이게 지금 출력이 안되고 있음.
+		// 그 이유를 생각해보면,
+		// 애초에 지금 위의 InactivateLeafNode 함수에서 active snapshot도 찾아지지 않고 있음.
+		// storage snapshot이 잘 업데이트가 되고 있는지 봐야 하고
+		// 잘 업데이트가 되고 있다면 그것을 inactive snapshot (snapStorage_inactive)에 잘 넣어야 함.
+		// 그리고 다시 찾아오는 것도 해야 함.
+		// 즉
+		// 1. active storage snapshot을 잘 찾아볼 것.
+		// 2. 찾아졌다면 inactive로 넘기기.
+		// 3. restore 할 때 inactive 영역에서 찾아오기.
+		// 그런데 이때 statedb.go 단이 아니라 state_object.go 단에서 이뤄지고 있는 것 같음.
+		// 확인해볼 것.
 	}
 	
 	// --> 직접 확인을 해봐야 함. CA simulation.
