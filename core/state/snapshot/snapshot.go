@@ -392,35 +392,43 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	return nil
 }
 
+// (joonha)
 // StorageList_ethane returns storage snapshot list according the accountHash 
-// traversing whole snapshot (diffs + disk(optional)) (joonha)
+// traversing whole snapshot (diffs + disk(optional))
 func (t *Tree) StorageList_ethane(blockRoot, accountHash common.Hash) []common.Hash {
 	
 	// snap := t.Snapshot(blockRoot)
 	// diff, _ := snap.(*diffLayer)
 	// return diff.StorageList(accountHash) // ref: difflayer.go
 
-	fmt.Println("calling StorageList_ethane()")
+	fmt.Println("\ncalling StorageList_ethane()")
 	var storageList []common.Hash
+
+	if t.Snapshots(blockRoot, 128, true) == nil {
+		fmt.Println("Snapshots are nil")
+	}
+
 	for _, snap := range t.Snapshots(blockRoot, 128, true) { // whether to find in diskLayer
 		fmt.Println("\n\nsnap >>> ", snap)
 		diff, _ := snap.(*diffLayer)
 		val, _ := diff.StorageList(accountHash)
-		fmt.Println("val >>> ", val, "\n\n")
+		fmt.Println("val >>> ", val)
 		storageList = append(storageList, val...)
+		fmt.Println("storageList >>> ", storageList, "\n\n")
 	}
-	fmt.Println("StorageList_ethane() done")
+	fmt.Println("StorageList_ethane() done\n")
 	return storageList
 }
 
+// (joonha)
 // AccountList_ethane returns all account snapshot list 
-// traversing whole snapshot (diffs + disk(optional)) (joonha) --> KEY or ADDR ?
+// traversing whole snapshot (diffs + disk(optional))
 func (t *Tree) AccountList_ethane(blockRoot common.Hash) []common.Hash {
 	// snap := t.Snapshot(blockRoot)
 	// diff, _ := snap.(*diffLayer)
 	// return diff.AccountList() // ref: difflayer.go
 
-	fmt.Println("calling AccountList_ethane()")
+	fmt.Println("\ncalling AccountList_ethane()")
 	var accountList []common.Hash
 
 	tmpSnap := t.Snapshot(blockRoot)
@@ -445,7 +453,7 @@ func (t *Tree) AccountList_ethane(blockRoot common.Hash) []common.Hash {
 		fmt.Println("val >>> ", val, "\n\n")
 		accountList = append(accountList, val...)
 	}
-	fmt.Println("AccountList_ethane() done")
+	fmt.Println("AccountList_ethane() done\n")
 	return accountList
 }
 

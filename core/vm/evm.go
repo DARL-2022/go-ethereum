@@ -428,7 +428,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// (3) 유효한 머클 검증인 경우 '사용된 머클 검증'에 그 키 값을 저장하여 재사용을 방지함.
 			_, merkleErr := trie.VerifyProof_ProofList(blockHeader.Root, inactiveKey.Bytes(), merkleProof_1)
 			
-			// TODO: 루트와 탑노드만 비교하도록 최적화. 현재는 전체에 대해서 VarifyProof를 하고 있음.
+			// TODO: 루트와 탑노드만 비교하도록 최적화. 현재는 전체에 대해서 VerifyProof를 하고 있음.
 
 			// blockHeader.Root가 merkleProof 맨 윗노드의 해시값과 같은지만 검사하면 됨.
 			// n, merkleErr := trie.VerifyProof_restore(blockHeader.Root, merkleProof_1)

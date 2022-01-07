@@ -80,11 +80,8 @@ type stateObject struct {
 	code Code // contract bytecode, which gets set when code is loaded
 
 	originStorage  Storage // Storage cache of original entries to dedup rewrites, reset for every transaction
-	originStorage_inactive  Storage // (joonha)
 	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
-	pendingStorage_inactive Storage // (joonha)
 	dirtyStorage   Storage // Storage entries that have been modified in the current transaction execution
-	dirtyStorage_inactive   Storage // (joonha)
 	fakeStorage    Storage // Fake storage which constructed by caller for debugging purpose.
 
 	// Cache flags.
@@ -138,11 +135,8 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 		addrHash:       addressHash,
 		data:           data,
 		originStorage:  make(Storage),
-		originStorage_inactive: make(Storage), // (joonha)
 		pendingStorage: make(Storage),
-		pendingStorage_inactive: make(Storage), // (joonha)
 		dirtyStorage:   make(Storage),
-		dirtyStorage_inactive: make(Storage), // (joonha)
 	}
 	// original code
 	// return &stateObject{
@@ -215,11 +209,6 @@ func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
 	if dirty {
 		return value
 	}
-	// // (joonha)
-	// value_inactive, dirty_inactive := s.dirtyStorage_inactive[key]
-	// if dirty_inactive {
-	// 	return value_inactive
-	// }
 	
 	// Otherwise return the entry's original value
 	return s.GetCommittedState(db, key)
@@ -235,17 +224,9 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	if value, pending := s.pendingStorage[key]; pending {
 		return value
 	}
-	// //(joonha)
-	// if value, pending := s.pendingStorage_inactive[key]; pending {
-	// 	return value
-	// }
 	if value, cached := s.originStorage[key]; cached {
 		return value
 	}
-	// // (joonha)
-	// if value, cached := s.originStorage_inactive[key]; cached {
-	// 	return value
-	// }
 	// If no live objects are available, attempt to use snapshots
 	var (
 		enc   []byte
@@ -276,19 +257,24 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if _, destructed := s.db.snapDestructs[s.addrHash]; destructed {
 			return common.Hash{}
 		}
-		// enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes())) // --> original code
-		enc, err = s.db.snap.Storage(s.addrHash, key) // (joonha)
+		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
+		
+		// (joonha)
+		fmt.Println("\n/////////////\n//  ^   ^  //\n//    O    //\n/////////////\n")
+		fmt.Println("s.addrHash: ", s.addrHash)
+		fmt.Println("key: ", key)
+		fmt.Println("(SNAPSHOT)enc: ", enc)
 	}
-	// // (joonha)
-	// if s.db.snap_inactive != nil {
-	// 	if metrics.EnabledExpensive {
-	// 		meter = &s.db.SnapshotStorageReads
-	// 	}
-	// 	if _, destructed := s.db.snapDestructs_inactive[s.addrHash]; destructed {
-	// 		return common.Hash{}
-	// 	}
-	// 	enc, err = s.db.snap_inactive.Storage(s.addrHash, key)
-	// }
+
+	// (joonha)
+	if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
+		s.setError(err)
+		return common.Hash{}
+	}
+	fmt.Println("(NO SNAPSHOT)enc: ", enc, "\n\n") // --> no snapshot
+
+
+
 
 	// If snapshot unavailable or reading from it failed, load from the database
 	if s.db.snap == nil || err != nil {
@@ -301,10 +287,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if metrics.EnabledExpensive {
 			meter = &s.db.StorageReads
 		}
-		// if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil { // -> original code
-		if enc, err = s.getTrie(db).TryGet_SetKey(key.Bytes()); err != nil { // (joonha))
-		// addrKey := common.AddrToKey[key] // (joonha)
-		// if enc, err = s.getTrie(db).TryGet_SetKey(addrKey[:]); err != nil { // (joonha)
+		if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil { 
 			s.setError(err)
 			return common.Hash{}
 		}
@@ -318,12 +301,11 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		value.SetBytes(content)
 	}
 	s.originStorage[key] = value
-	// s.originStorage_inactive[key] = value
 	return value
 }
 
 // SetState updates a value in account storage.
-func (s *stateObject) SetState(db Database, key, value common.Hash) {
+func (s *stateObject) SetState(db Database, key, value common.Hash) { // key = slotKey (joonha)
 	// If the fake storage is set, put the temporary state update here.
 	if s.fakeStorage != nil {
 		s.fakeStorage[key] = value
@@ -392,21 +374,6 @@ func (s *stateObject) finalise(prefetch bool) {
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
 	}
-
-	// (joonha)
-	slotsToPrefetch_inactive := make([][]byte, 0, len(s.dirtyStorage_inactive))
-	for key, value := range s.dirtyStorage_inactive {
-		s.pendingStorage_inactive[key] = value
-		if value != s.originStorage_inactive[key] {
-			slotsToPrefetch_inactive = append(slotsToPrefetch_inactive, common.CopyBytes(key[:])) // Copy needed for closure
-		}
-	}
-	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch_inactive) > 0 && s.data.Root != emptyRoot {
-		s.db.prefetcher.prefetch(s.data.Root, slotsToPrefetch_inactive)
-	}
-	if len(s.dirtyStorage_inactive) > 0 {
-		s.dirtyStorage_inactive = make(Storage)
-	}
 }
 
 // updateTrie writes cached storage modifications into the object's storage trie.
@@ -417,23 +384,29 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	if len(s.pendingStorage) == 0 {
 		return s.trie
 	}
-	// // (joonha)
-	// if len(s.pendingStorage_inactive) == 0 {
-	// 	return s.trie
-	// }
 	// Track the amount of time wasted on updating the storage trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
 	}
 	// The snapshot storage map for the object
 	var storage map[common.Hash][]byte
-	var storage_inactive map[common.Hash][]byte // (joonha)
 	// Insert all the pending updates into the trie
 	tr := s.getTrie(db)
-	// hasher := s.db.hasher
+	hasher := s.db.hasher
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
+	
+	fmt.Println("joonha 2022 1")
+	
 	for key, value := range s.pendingStorage {
+		fmt.Println("  ^^^^^^^^^^^^^^^^^^")
+		fmt.Println("<<                  >>")
+		fmt.Println("  vvvvvvvvvvvvvvvvvv")
+		fmt.Println("  ^^^^^^^^^^^^^^^^^^")
+		fmt.Println("<<                  >>")
+		fmt.Println("  vvvvvvvvvvvvvvvvvv")
+		fmt.Println("joonha 2022 2")
+
 		// Skip noop changes, persist actual changes
 		if value == s.originStorage[key] {
 			continue
@@ -449,66 +422,40 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			s.setError(tr.TryUpdate(key[:], v)) // maybe related to storage trie update? (jmlee)
 		}
 		// If state snapshotting is active, cache the data til commit
+		fmt.Println("joonha 2022 3")
 		if s.db.snap != nil {
-			if storage == nil {
+			fmt.Println("joonha 2022 4")
+			if storage == nil { 
+				fmt.Println("joonha 2022 5")
 				// Retrieve the old storage map, if available, create a new one otherwise
 				if storage = s.db.snapStorage[s.addrHash]; storage == nil {
 					storage = make(map[common.Hash][]byte)
 					s.db.snapStorage[s.addrHash] = storage
 				}
-			}
-			// storage[crypto.HashData(hasher, key[:])] = v // v will be nil if value is 0x00 // --> original code
-			storage[key] = v // (joonha)
+			} 
+			// else { // storage is not nil (joonha)
+			// 	fmt.Println("joonha 2022 5-1")
+			// 	if s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])] != nil {
+			// 		fmt.Println("joonha 2022 5-2")
+			// 		fmt.Println("s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])]: ", s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])])
+			// 	}
+			// 	fmt.Println("joonha 2022 5-3")
+			// 	s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])] = v
+			// 	fmt.Println("s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])]: ", s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])])
+			// 	fmt.Println("v: ", v)
+			// }
+			fmt.Println("joonha 2022 6")
+			storage[crypto.HashData(hasher, key[:])] = v // v will be nil if value is 0x00
+			fmt.Println("storage[crypto.HashData(hasher, key[:])]: ", storage[crypto.HashData(hasher, key[:])])
+			fmt.Println("v: ", v,  "\n\n")
 		}
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
 	}
-	// (joonha)
-	usedStorage_inactive := make([][]byte, 0, len(s.pendingStorage_inactive))
-	for key, value := range s.pendingStorage_inactive {
-		// Skip noop changes, persist actual changes
-		// (joonha)
-		if value == s.originStorage_inactive[key] {
-			continue
-		}
-		s.originStorage_inactive[key] = value
-
-		var v []byte
-		if (value == common.Hash{}) {
-			s.setError(tr.TryDelete(key[:]))
-		} else {
-			// Encoding []byte cannot fail, ok to ignore the error.
-			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			s.setError(tr.TryUpdate(key[:], v)) // maybe related to storage trie update? (jmlee)
-		}
-		// If state snapshotting is active, cache the data til commit
-		// (joonha)
-		if s.db.snap_inactive != nil {
-			if storage_inactive == nil {
-				// Retrieve the old storage map, if available, create a new one otherwise
-				if storage_inactive = s.db.snapStorage_inactive[s.addrHash]; storage_inactive == nil {
-					storage_inactive = make(map[common.Hash][]byte)
-					s.db.snapStorage_inactive[s.addrHash] = storage_inactive
-				}
-			}
-			storage_inactive[key] = v // (joonha)
-		}
-		usedStorage_inactive = append(usedStorage_inactive, common.CopyBytes(key[:])) // Copy needed for closure
-	}
-	
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.data.Root, usedStorage)
 	}
-	// (joonha)
-	if s.db.prefetcher != nil {
-		s.db.prefetcher.used(s.data.Root, usedStorage_inactive)
-	}
-
 	if len(s.pendingStorage) > 0 {
 		s.pendingStorage = make(Storage)
-	}
-	// (joonha)
-	if len(s.pendingStorage_inactive) > 0 {
-		s.pendingStorage_inactive = make(Storage)
 	}
 	return tr
 }
@@ -592,11 +539,8 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	}
 	stateObject.code = s.code
 	stateObject.dirtyStorage = s.dirtyStorage.Copy()
-	stateObject.dirtyStorage_inactive = s.dirtyStorage_inactive.Copy() // (joonha)
 	stateObject.originStorage = s.originStorage.Copy()
-	stateObject.originStorage_inactive = s.originStorage_inactive.Copy() // (joonha)
 	stateObject.pendingStorage = s.pendingStorage.Copy()
-	stateObject.pendingStorage_inactive = s.pendingStorage_inactive.Copy() // (joonha)
 	stateObject.suicided = s.suicided
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
@@ -719,8 +663,6 @@ func NewObject(db *StateDB, address common.Address, data Account) *stateObject {
 		addrHash:      crypto.Keccak256Hash(address[:]),
 		data:          data,
 		originStorage: make(Storage),
-		originStorage_inactive: make(Storage), // (joonha)
 		dirtyStorage:  make(Storage),
-		dirtyStorage_inactive:  make(Storage), // (joonha)
 	}
 }
