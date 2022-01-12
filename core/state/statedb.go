@@ -151,9 +151,10 @@ type StateDB struct {
 	AddrToKeyDirty		map[common.Address]common.Hash // dirty cache for common.AddrToKey
 	KeysToDeleteDirty	[]common.Hash // dirty cache for common.KeysToDelete
 
-	// (joonha)
+	// divide inactive from active part (joonha)
 	AlreadyRestoredDirty 	map[common.Hash]common.Empty
 	AddrToKeyDirty_inactive	map[common.Address][]common.Hash // dirty cache for common.AddrToKey_inactive
+	// RebuildingSlots			map[common.Address]map[common.Hash][]byte
 }
 
 // New creates a new state from a given trie.
@@ -609,7 +610,26 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 
 // SetState_Restore set storage slot when restoring CA (joonha)
 func (s *StateDB) SetState_Restore(addr common.Address, key, value common.Hash) {
-	stateObject := s.GetOrNewStateObject(addr) // 즉 account가 restore된 후에 이 함수가 불려야 에러가 발생하지 않을 것임.
+	
+	// get key
+	addrKey, doExist := s.AddrToKeyDirty[addr]
+	if !doExist {
+		addrKey = common.AddrToKey[addr]
+	}
+	addrKey_bigint := new(big.Int)
+	addrKey_bigint.SetString(addrKey.Hex()[2:], 16)
+
+	// get renewed account
+	var stateObject *stateObject
+	if addrKey_bigint.Int64() >= common.InactiveBoundaryKey { // restore by merge
+		fmt.Println("RESTORING BY MERGE\n")
+		// stateObject = s.getStateObject_FromInactiveTrie(addr)
+		stateObject = s.getStateObject(addr)
+	} else { // restore by create
+		fmt.Println("RESTORING BY CREATE\n")
+		stateObject = s.stateObjects[addr]
+	}
+	
 	if stateObject != nil {
 		stateObject.SetState_Restore(s.db, key, value)
 	}
@@ -726,7 +746,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		obj.addrHash = newAddrHash
 		s.NextKey += 1
 
-	} else { // < InactiveBoundaryKey : creating a crumb or restoring (joonha) 
+	} else { // < InactiveBoundaryKey : creating a crumb or restoring by creating (joonha) 
 		// fmt.Println("\n\nupdateStateObject ----------> third case\n\n")
 		/***********************************************************/
 		// HAD BEEN INACTIVATED SO THIS SEEMS NEW TO ACTIVE TRIE
@@ -1771,7 +1791,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			for k, v := range s.snapStorage_inactive {
 				for kk, vv := range v {
 					fmt.Println("s.snapStorage_inactive[", k, "] -> kk:", kk, "/ vv:", vv)
-				}
+				} 
 			}
 
 			// Only update if there's a state transition (skip empty Clique blocks)
@@ -1991,23 +2011,21 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		accountList := s.snaps.AccountList_ethane(snapRoot) // handing in snapRoot
 		fmt.Println("accountList: ", accountList) // key
 
-		slotKeyList := s.snaps.StorageList_ethane(snapRoot, key) // active snapshot's storage list
+		slotKeyList := s.snaps.StorageList_ethane(snapRoot, key) // active snapshot's storage list (key is the accountHash to be deleted)
 		fmt.Println("slotKeyList: ", slotKeyList)
+		fmt.Println("key: ", key)
 		fmt.Println("joonha 6")
 		temp := make(map[common.Hash][]byte)
-		for slotKey := range slotKeyList { // int
+		for _, slotKey := range slotKeyList {
 			fmt.Println("joonha 7")
-			slotKey_hash := common.Int64ToHash(int64(slotKey))
-			v, _ := s.snap.Storage(key, slotKey_hash) // slot value ////// --> 맞나?
-			temp[slotKey_hash] = v
+			fmt.Println("slotKey is ", slotKey)
+			v, _ := s.snap.Storage(key, slotKey) 
+			fmt.Println("v is", v)
+			temp[slotKey] = v
+			fmt.Println("")
 		}
 		fmt.Println("joonha 8")
 		s.snapStorage_inactive[keyToInsert] = temp
-
-		// --> 문제가 좁혀짐.
-		// 스냅을 찾고 traverse 하는데까지 성공함.
-		// 그러나 storage slot들이 안찾아짐.
-
 
 		// DELETE:
 		s.snapDestructs[key] = struct{}{}
@@ -2055,8 +2073,9 @@ func (s *StateDB) RemoveRestoredKeyFromAddrToKeyDirty_inactive(inactiveAddr comm
 }
 
 // rebuild a storage trie when restoring using snapshot (joonha)
-func (s *StateDB) RebuildStorageTrieFromSnapshot(snapRoot common.Hash, addr common.Address, key common.Hash) {
+func (s *StateDB) RebuildStorageTrieFromSnapshot(snapRoot common.Hash, addr common.Address, accountHash common.Hash) {
 
+	// should i call this function not from evm.go but from updateStateObject()?
 	
 	fmt.Println("\n\n\nrebuilding storage trie starts")
 
@@ -2065,73 +2084,54 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(snapRoot common.Hash, addr comm
 	fmt.Println("evm > blockRoot: ", snapRoot)
 
 
-	/******************************************/
-	// GET NODE FROM SNAPSHOT
-	/******************************************/
 	// ref: core/state/snapshot/difflayer.go >> AccountList() & StorageList()
 
-	// param snapRoot
-	accountHash := key
-
-	if s.snap_inactive != nil {
-
-		// snaps_inactive Account List
-		accountList := s.snaps_inactive.AccountList_ethane(snapRoot) // handing in blockRoot
-		fmt.Println("RESTORING ACCOUNT LIST: ", accountList) // key
-		
-		// get Account from snap_inactive 
-		if account, err := s.snap_inactive.Account(accountHash); err == nil { // get account by key
-			fmt.Println("RESTORING ACCOUNT: ", account)
-			if account != nil {
-				fmt.Println("ACCOUNT ADDR: ", account.Addr)
-				fmt.Println("ACCOUNT Balance: ", account.Balance)
-			}
-		} 
-		// acc := s.snaps_inactive.GetAccountFromSnapshots(accountHash, snapRoot, false) // false: find from disk, true: do not find from disk
-		// fmt.Println("### acc: ", acc)
+	/******************************************************/
+	// RETRIEVE ACCOUNT FROM SNAPSHOT (FOR DEBUGGING)
+	/******************************************************/
+	// // snaps_inactive Account List
+	// accountList := s.snaps_inactive.AccountList_ethane(snapRoot) // handing in blockRoot
+	// fmt.Println("RESTORING ACCOUNT LIST: ", accountList) // key
+	
+	// // get Account from snap_inactive 
+	// if account, err := s.snap_inactive.Account(accountHash); err == nil { // get account by key
+	// 	fmt.Println("RESTORING ACCOUNT: ", account)
+	// 	if account != nil {
+	// 		fmt.Println("ACCOUNT ADDR: ", account.Addr)
+	// 		fmt.Println("ACCOUNT Balance: ", account.Balance)
+	// 	}
+	// } 
 
 
-		// snaps_inactive Storage List of the account
-		storageList := s.snaps_inactive.StorageList_ethane(snapRoot, accountHash)
-		fmt.Println("RESTORING STORAGE LIST: ", storageList)	
-		// 이게 지금 출력이 안되고 있음.
-		// 그 이유를 생각해보면,
-		// 애초에 지금 위의 InactivateLeafNode 함수에서 active snapshot도 찾아지지 않고 있음.
-		// storage snapshot이 잘 업데이트가 되고 있는지 봐야 하고
-		// 잘 업데이트가 되고 있다면 그것을 inactive snapshot (snapStorage_inactive)에 잘 넣어야 함.
-		// 그리고 다시 찾아오는 것도 해야 함.
-		// 즉
-		// 1. active storage snapshot을 잘 찾아볼 것.
-		// 2. 찾아졌다면 inactive로 넘기기.
-		// 3. restore 할 때 inactive 영역에서 찾아오기.
-		// 그런데 이때 statedb.go 단이 아니라 state_object.go 단에서 이뤄지고 있는 것 같음.
-		// 확인해볼 것.
+	/******************************************************/
+	// RETRIEVE STORAGE SLOTS FROM SNAPSHOT
+	/******************************************************/
+	// snaps_inactive Storage List of the account
+	slotKeyList := s.snaps_inactive.StorageList_ethane(snapRoot, accountHash)
+	fmt.Println("RESTORING STORAGE LIST: ", slotKeyList)	
+	
+
+
+	/******************************************/
+	// REBUILD STORAGE TRIE
+	/******************************************/
+	// set storage retrieved from inactive storage snapshot
+	
+	temp := make(map[common.Hash][]byte)
+	for _, slotKey := range slotKeyList {
+		fmt.Println("slotKey is ", slotKey)
+		v, _ := s.snap_inactive.Storage(accountHash, slotKey)
+		fmt.Println("v is", v)
+
+		// Rebuild the storage trie 
+		s.SetState_Restore(addr, slotKey, common.BytesToHash(v))
+		temp[slotKey] = v
 	}
+	// s.snapStorage[/* 계정 키 */] = temp // <-- 키를 모르네...
 	
-	// --> 직접 확인을 해봐야 함. CA simulation.
-	// --> 우선 EOA도 구현해 봄.
-
-
-
-
-
-	// /******************************************/
-	// // REBUILD STORAGE TRIE
-	// /******************************************/
-	
-	// // k와 v를 state의 요소로부터 얻지 않고
-	// // 위에서 만든 accountList와 storageList로부터 얻어야 함.
-	// // 고로, 수정할 것.
-
-	// // set storage retrieved from inactive storage snapshot
-	// for k, v := range s.snapStorage_inactive[key] {
-	// 	s.SetState_Restore(addr, k, common.BytesToHash(v))
-	// }
-	// // delete inactive storage from memory (not from disk)
-	// var p common.Hash // nil
-	// for k, _ := range s.snapStorage_inactive[key] {
-	// 	s.SetState_Restore(addr, k, p)
-	// }
+	// TODO
+	// 1. delete inactive snapshots (no need to delete'em from trie because they don't exist there!)
+	// 2. add to active snapshot (check if i should do this) -> 내가 해줘야 하는 것 맞음. 윗윗줄에서.
 
 
 	// /******************************************/
@@ -2149,10 +2149,12 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(snapRoot common.Hash, addr comm
 	// 	}
 	// 	s.snapStorage[k] = temp
 	// }
-	// // delete inactive snapshot
-	// delete(s.snapStorage_inactive, key) // delete this from snapshot's update list
-	// delete(s.snapAccounts_inactive, key) // delete this from snapshot's update list
-	// s.snapDestructs_inactive[key] = struct{}{}
+
+
+	// delete inactive snapshot
+	delete(s.snapStorage_inactive, accountHash) // delete this from snapshot's update list
+	delete(s.snapAccounts_inactive, accountHash) // delete this from snapshot's update list
+	s.snapDestructs_inactive[accountHash] = struct{}{}
 
 
 
