@@ -510,15 +510,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// 2. update active snapshot
 		// 3. remove inactive snapshot
 
-		// statedb.go에서 snapshot.GenerateStorageTrie를 수행하는 함수를 여기서 콜함.
-		// if common.UsingInactiveStorageSnapshot == 1 {
-		// 	evm.StateDB.RebuildStorageTrieFromSnapshot(inactiveAddr, inactiveKey)
-		// }
-		// evm.StateDB.RebuildStorageTrieFromSnapshot(inactiveAddr, inactiveKey)
-
-		// 이 함수 콜은 snapshot 옵션을 껐을 때에 패닉 에러를 발생시킨다.
-		// 정확히는 nil 맵에 접근하기 때문에 생기는 에러인데,
-		// 현재 스냅샷이 모두 날아가는 문제와 그 원인을 같이 하는 것으로 보인다.
+		// TODO: check the snapshot option
 		evm.StateDB.RebuildStorageTrieFromSnapshot(blockRoot, inactiveAddr, inactiveKey)
 
 		/***************************************/

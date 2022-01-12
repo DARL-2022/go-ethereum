@@ -528,7 +528,6 @@ func (dl *diffLayer) AccountList() []common.Hash {
 //
 // Note, the returned slice is not a copy, so do not modify it.
 func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) {
-	fmt.Println("(storageList) joonha 1")
 	dl.lock.RLock()
 	_, destructed := dl.destructSet[accountHash]
 	if _, ok := dl.storageData[accountHash]; !ok {
@@ -536,32 +535,24 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) 
 		dl.lock.RUnlock()
 		return nil, destructed
 	}
-	fmt.Println("(storageList) joonha 2")
 	// If an old list already exists, return it
 	if list, exist := dl.storageList[accountHash]; exist {
 		dl.lock.RUnlock()
 		return list, destructed // the cached list can't be nil
 	}
-	fmt.Println("(storageList) joonha 3")
 	dl.lock.RUnlock()
 
 	// No old sorted account list exists, generate a new one
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
-	fmt.Println("(storageList) joonha 4")
 
 	storageMap := dl.storageData[accountHash]
 	storageList := make([]common.Hash, 0, len(storageMap))
-	fmt.Println("(storageList) joonha 5")
 	for k := range storageMap {
-		fmt.Println("(storageList) joonha 6")
 		storageList = append(storageList, k)
 	}
-	fmt.Println("(storageList) joonha 7")
 	sort.Sort(hashes(storageList))
 	dl.storageList[accountHash] = storageList
-	fmt.Println("(storageList) joonha 8")
 	dl.memory += uint64(len(dl.storageList)*common.HashLength + common.HashLength)
-	fmt.Println("(storageList) joonha 9")
 	return storageList, destructed
 }
