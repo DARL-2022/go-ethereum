@@ -96,6 +96,8 @@ def sendTransactions(num, offset):
         # if the upper bound is set, select receiver within the bound
         if MAX_ADDRESS != 0:
             to = intToAddr(random.randint(1, MAX_ADDRESS))
+
+        # to = "0xe4f853b9d237b220f0ECcdf55d224c54a30032Df"
         
         # set send amount
         if INCREMENTAL_SEND_AMOUNT:
