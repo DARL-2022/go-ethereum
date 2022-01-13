@@ -129,6 +129,10 @@ if __name__ == "__main__":
         CONTRACT.functions.set(90, 46).transact({'gas':GAS})
 
 
+        CONTRACT.functions.set(100, 1).transact({'gas':GAS})
+
+
+
 
 
         # should know the slot offset to calculate the mapLocation
@@ -141,7 +145,8 @@ if __name__ == "__main__":
         print("Storage Map:\t\t\t" + str(MAP))
 
     except:
-        print("ERROR: cannot connect to Ethereum node. Start ethereum node first")
+        # print("ERROR: cannot connect to Ethereum node. Start ethereum node first")
+        print("WARNING: No contract account to update")
         sys.exit()
 
 

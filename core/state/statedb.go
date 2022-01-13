@@ -623,12 +623,17 @@ func (s *StateDB) SetState_Restore(addr common.Address, key, value common.Hash) 
 	var stateObject *stateObject
 	if addrKey_bigint.Int64() >= common.InactiveBoundaryKey { // restore by merge
 		fmt.Println("RESTORING BY MERGE\n")
-		// stateObject = s.getStateObject_FromInactiveTrie(addr)
-		stateObject = s.getStateObject(addr)
 	} else { // restore by create
 		fmt.Println("RESTORING BY CREATE\n")
-		stateObject = s.stateObjects[addr]
 	}
+
+	if s.getStateObject(addr) == s.stateObjects[addr] {
+		fmt.Println("THEY ARE SAME")
+	} else {
+		fmt.Println("THEY ARE DIFFERENT")
+	}
+
+	stateObject = s.getStateObject(addr) 
 	
 	if stateObject != nil {
 		stateObject.SetState_Restore(s.db, key, value)
@@ -727,13 +732,13 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		// fmt.Println("append this to KeysToDeleteDirty to delete later -> key:", addrKey.Hex(), "/ addr:", addr.Hex())
 		s.KeysToDeleteDirty = append(s.KeysToDeleteDirty, addrKey)
 		
-		// additional update to delete this leaf node from snapshot
-		if s.snap != nil {
-			// fmt.Println("addr:", obj.Address().Hex(), "delete snapAccounts -> addrKey:", addrKey.Hex())
-			delete(s.snapAccounts, obj.addrHash) // delete this from snapshot's update list
-			delete(s.snapStorage, obj.addrHash) // (joonha)
-			s.snapDestructs[obj.addrHash] = struct{}{} // add this to snapshot's delete list
-		}
+		// // additional update to delete this leaf node from snapshot
+		// if s.snap != nil {
+		// 	// fmt.Println("addr:", obj.Address().Hex(), "delete snapAccounts -> addrKey:", addrKey.Hex())
+		// 	delete(s.snapAccounts, obj.addrHash) // delete this from snapshot's update list
+		// 	delete(s.snapStorage, obj.addrHash) // (joonha)
+		// 	s.snapDestructs[obj.addrHash] = struct{}{} // add this to snapshot's delete list
+		// }
 
 		// insert new leaf node at right side
 		newAddrHash := common.HexToHash(strconv.FormatInt(s.NextKey, 16))
@@ -784,19 +789,33 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// at transaction boundary level to ensure we capture state clearing.
 	if s.snap != nil {
 		// fmt.Println("addr:", obj.Address().Hex(), "update snapAccounts -> addrKey:", obj.addrHash.Hex())
-		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash, addr) // flag(joonha) 스냅샷을 생성
+		fmt.Println("\n(USO) Addr: ", obj.data.Addr)
+		fmt.Println("(USO) Nonce: ", obj.data.Nonce)
+		fmt.Println("(USO) Balance: ", obj.data.Balance)
+		fmt.Println("(USO) Root: ", obj.data.Root)
+		fmt.Println("(USO) CodeHash: ", obj.data.CodeHash)
+
+		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash, addr)
 		fmt.Println("\n>>> snapshot.SlimAccountRLP( ): ", s.snapAccounts[obj.addrHash], "\n")
-		// snapStorage는 업데이트 안하나...?
-		// snapStorage는 어디서 어떻게 저장하는가?
-		// storage는 state_object.go에서 하는 것 같음.
 
 		// 새 키로 스냅샷을 만든 거니까, 이전 키의 스냅샷은 삭제해줘야 함. 단, key 업데이트 없는 경우는 제외. (joonha)
 		// 이는 기존 geth와 달리 compactMPT에서는 스냅샷의 value 뿐 아니라 key 도 바뀌기 때문임.
 		if obj.addrHash != prevAddrHash { // key has been changed
+			// storage snapshot의 account addr도 모두 변경해줘야 함.
+			temp := make(map[common.Hash][]byte)
+			for kk, vv := range s.snapStorage[prevAddrHash] {
+				temp[kk] = vv
+			}
+			s.snapStorage[obj.addrHash] = temp
+
 			s.snapDestructs[prevAddrHash] = struct{}{} // add this to snapshot's delete list
 			delete(s.snapAccounts, prevAddrHash) // delete this from snapshot's update list
 			delete(s.snapStorage, prevAddrHash) // delete this from snapshot's update list
 		}
+
+		for slotKey, slotValue := range s.snapStorage[obj.addrHash] {
+			fmt.Println("(USO)s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
+		} 
 
 	}
 
@@ -1606,24 +1625,53 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 
+	fmt.Println("COMMIT --> 1")
+
 	// Commit objects to the trie, measuring the elapsed time
 	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
 	for addr := range s.stateObjectsDirty {
+		fmt.Println("COMMIT --> 2")
 		if obj := s.stateObjects[addr]; !obj.deleted {
+			fmt.Println("COMMIT --> 3")
 			// maybe this updates storage tries (jmlee)
 
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {
+				fmt.Println("COMMIT --> 4")
 				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
 				obj.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie
-			if err := obj.CommitTrie(s.db); err != nil {
+			if err := obj.CommitTrie(s.db); err != nil { // --> storage update occurs here (joonha)
+				fmt.Println("COMMIT --> 5")
 				return common.Hash{}, err
 			}
+			fmt.Println("COMMIT --> 6")
 		}
+		fmt.Println("COMMIT --> 7")
+		// debugging (joonha)
+		var slotKeyList []common.Hash
+		for slotKey, slotValue := range s.snapStorage[s.stateObjects[addr].addrHash] {
+			fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
+			trieSlotValue := s.GetState(addr, slotKey)
+			fmt.Println("trieSlotValue: ", trieSlotValue)
+			slotKeyList = append(slotKeyList, slotKey)
+		} 
+		// print storage slots (joonha)
+		fmt.Println("\naddr: ", addr)
+		fmt.Println("StorageTrie(addr): ", s.StorageTrie(addr))
+		fmt.Println("slotKeyList: ", slotKeyList)
+
+		fmt.Println("\nCodeHash: ", s.stateObjects[addr].data.CodeHash)
+		fmt.Println("Root: ", s.stateObjects[addr].data.Root)
+		
+		fmt.Println("")
+
+		// print slots (joonha)
 	}
-	
+	fmt.Println("COMMIT --> 8")
+
+
 	// apply dirties to common.AddrToKey (jmlee)
 	common.AddrToKeyMapMutex.Lock()
 	for key, value := range s.AddrToKeyDirty {
@@ -1752,8 +1800,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				// (joonha)
 				for slotKey, slotValue := range s.snapStorage[k] {
 					fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
-				} // --> active storage snapshot이 잘 들어오고 있음을 확인함.
-				// 그러니 이제 문제는 왜 StorageList에서 출력이 안되냐임.
+				} 
 			}
 
 			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil { // flag(joonha) core/state/snapshot/snapshot.go의 Update 함수가 여기서 불림.
@@ -2127,8 +2174,6 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(snapRoot common.Hash, addr comm
 		s.SetState_Restore(addr, slotKey, common.BytesToHash(v))
 		temp[slotKey] = v
 	}
-	// s.snapStorage[/* 계정 키 */] = temp // <-- 키를 모르네...
-	
 	// TODO
 	// 1. delete inactive snapshots (no need to delete'em from trie because they don't exist there!)
 	// 2. add to active snapshot (check if i should do this) -> 내가 해줘야 하는 것 맞음. 윗윗줄에서.

@@ -397,8 +397,13 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
 	
 	fmt.Println("joonha 2022 1")
+
+	// debugging (joonha)
+	for slotKey, slotValue := range s.db.snapStorage[s.addrHash] {
+		fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
+	} 
 	
-	for key, value := range s.pendingStorage {
+	for key, value := range s.pendingStorage { 
 		fmt.Println("  ^^^^^^^^^^^^^^^^^^")
 		fmt.Println("<<                  >>")
 		fmt.Println("  vvvvvvvvvvvvvvvvvv")
@@ -429,28 +434,29 @@ func (s *stateObject) updateTrie(db Database) Trie {
 				fmt.Println("joonha 2022 5")
 				// Retrieve the old storage map, if available, create a new one otherwise
 				if storage = s.db.snapStorage[s.addrHash]; storage == nil {
+					fmt.Println("joonha 2022 5-1")
 					storage = make(map[common.Hash][]byte)
 					s.db.snapStorage[s.addrHash] = storage
 				}
 			} 
-			// else { // storage is not nil (joonha)
-			// 	fmt.Println("joonha 2022 5-1")
-			// 	if s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])] != nil {
-			// 		fmt.Println("joonha 2022 5-2")
-			// 		fmt.Println("s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])]: ", s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])])
-			// 	}
-			// 	fmt.Println("joonha 2022 5-3")
-			// 	s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])] = v
-			// 	fmt.Println("s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])]: ", s.db.snapStorage[s.addrHash][crypto.HashData(hasher, key[:])])
-			// 	fmt.Println("v: ", v)
-			// }
 			fmt.Println("joonha 2022 6")
 			storage[crypto.HashData(hasher, key[:])] = v // v will be nil if value is 0x00
+			// // add to snapStorage
+			// s.db.snapStorage[s.addrHash][key] = v // (joonha)
+			// fmt.Println("key: ", key)
 			fmt.Println("storage[crypto.HashData(hasher, key[:])]: ", storage[crypto.HashData(hasher, key[:])])
 			fmt.Println("v: ", v,  "\n\n")
 		}
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
 	}
+
+
+	// // debugging (joonha)
+	// for slotKey, slotValue := range s.db.snapStorage[s.addrHash] {
+	// 	fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
+	// } 
+
+	fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.data.Root, usedStorage)
 	}
