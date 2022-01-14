@@ -1662,7 +1662,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		fmt.Println("StorageTrie(addr): ", s.StorageTrie(addr))
 		fmt.Println("slotKeyList: ", slotKeyList)
 
-		fmt.Println("\nCodeHash: ", s.stateObjects[addr].data.CodeHash)
+		fmt.Println("CodeHash: ", s.stateObjects[addr].data.CodeHash)
 		fmt.Println("Root: ", s.stateObjects[addr].data.Root)
 		
 		fmt.Println("")
