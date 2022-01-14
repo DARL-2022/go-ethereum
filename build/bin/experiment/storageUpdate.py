@@ -29,7 +29,7 @@ FULL_PORT = "8083"
 PASSWORD = "1234"
 
 # Account number
-ACCOUNT_NUM = int(sys.argv[1])
+# ACCOUNT_NUM = int(sys.argv[1])
 TX_PER_BLOCK = 5 # 200
 
 # multiprocessing
@@ -124,12 +124,12 @@ if __name__ == "__main__":
         # set mapping
         # CONTRACT.functions.set(88, 45).transact({'gas':GAS})
         CONTRACT.functions.set(88, 47).transact({'gas':GAS})
-        CONTRACT.functions.set(89, 33).transact({'gas':GAS})
-        CONTRACT.functions.set(88, 46).transact({'gas':GAS})
-        CONTRACT.functions.set(90, 46).transact({'gas':GAS})
+        # CONTRACT.functions.set(89, 33).transact({'gas':GAS})
+        # CONTRACT.functions.set(88, 46).transact({'gas':GAS})
+        # CONTRACT.functions.set(90, 46).transact({'gas':GAS})
 
 
-        CONTRACT.functions.set(100, 1).transact({'gas':GAS})
+        # CONTRACT.functions.set(100, 1).transact({'gas':GAS})
 
 
 

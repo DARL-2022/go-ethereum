@@ -271,7 +271,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		fmt.Println("(SNAPSHOT)enc: ", enc)
 	}
 
-	// (joonha)
+	// no hashing (joonha)
 	if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
 		s.setError(err)
 		return common.Hash{}
@@ -339,6 +339,7 @@ func (s *stateObject) SetState_Restore(db Database, key, value common.Hash) {
 		// prevalue: prev,
 	})
 	s.setState(key, value)
+	s.updateTrie_hashedKey(db)
 }
 
 // SetStorage replaces the entire state storage with the given one.
@@ -448,10 +449,9 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			} 
 			fmt.Println("joonha 2022 6")
 			storage[crypto.HashData(hasher, key[:])] = v // v will be nil if value is 0x00
-			// // add to snapStorage
-			// s.db.snapStorage[s.addrHash][key] = v // (joonha)
-			// fmt.Println("key: ", key)
+			// storage[key] = v
 			fmt.Println("storage[crypto.HashData(hasher, key[:])]: ", storage[crypto.HashData(hasher, key[:])])
+			// fmt.Println("storage[key]: ", storage[key])
 			fmt.Println("v: ", v,  "\n\n")
 		}
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
@@ -473,17 +473,102 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	return tr
 }
 
+// updateTrie_hashedKey updates trie with already hashed key (joonha)
+func (s *stateObject) updateTrie_hashedKey(db Database) Trie {
+	// Make sure all dirty slots are finalized into the pending storage area
+	s.finalise(false) // Don't prefetch any more, pull directly if need be
+	if len(s.pendingStorage) == 0 {
+		return s.trie
+	}
+	// Track the amount of time wasted on updating the storage trie
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
+	}
+	// The snapshot storage map for the object
+	var storage map[common.Hash][]byte
+	// Insert all the pending updates into the trie
+	tr := s.getTrie(db)
+	// hasher := s.db.hasher
+
+	usedStorage := make([][]byte, 0, len(s.pendingStorage))
+	
+	fmt.Println("joonha 2022 1")
+
+	// debugging (joonha)
+	for slotKey, slotValue := range s.db.snapStorage[s.addrHash] {
+		fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
+	} 
+	
+	for key, value := range s.pendingStorage { 
+		fmt.Println("  ^^^^^^^^^^^^^^^^^^")
+		fmt.Println("<<                  >>")
+		fmt.Println("  vvvvvvvvvvvvvvvvvv")
+		fmt.Println("  ^^^^^^^^^^^^^^^^^^")
+		fmt.Println("<<                  >>")
+		fmt.Println("  vvvvvvvvvvvvvvvvvv")
+		fmt.Println("joonha 2022 2")
+
+		// Skip noop changes, persist actual changes
+		if value == s.originStorage[key] {
+			continue
+		}
+		s.originStorage[key] = value
+
+		var v []byte
+		if (value == common.Hash{}) {
+			s.setError(tr.TryDelete(key[:]))
+		} else {
+			// Encoding []byte cannot fail, ok to ignore the error.
+			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
+			s.setError(tr.TryUpdate(key[:], v)) // maybe related to storage trie update? (jmlee)
+		}
+		// If state snapshotting is active, cache the data til commit
+		fmt.Println("joonha 2022 3")
+		if s.db.snap != nil {
+			fmt.Println("joonha 2022 4")
+			if storage == nil { 
+				fmt.Println("joonha 2022 5")
+				// Retrieve the old storage map, if available, create a new one otherwise
+				if storage = s.db.snapStorage[s.addrHash]; storage == nil {
+					fmt.Println("joonha 2022 5-1")
+					storage = make(map[common.Hash][]byte)
+					s.db.snapStorage[s.addrHash] = storage
+				}
+			} 
+			fmt.Println("joonha 2022 6")
+			// storage[crypto.HashData(hasher, key[:])] = v // v will be nil if value is 0x00
+			storage[key] = v
+			// fmt.Println("storage[crypto.HashData(hasher, key[:])]: ", storage[crypto.HashData(hasher, key[:])])
+			fmt.Println("storage[key]: ", storage[key])
+			fmt.Println("v: ", v,  "\n\n")
+		}
+		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
+	}
+
+	fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
+	if s.db.prefetcher != nil {
+		s.db.prefetcher.used(s.data.Root, usedStorage)
+	}
+	if len(s.pendingStorage) > 0 {
+		s.pendingStorage = make(Storage)
+	}
+	return tr
+}
+
 // UpdateRoot sets the trie root to the current root hash of
 func (s *stateObject) updateRoot(db Database) {
+	fmt.Println("--> updateRoot 1")
 	// If nothing changed, don't bother with hashing anything
 	if s.updateTrie(db) == nil {
 		return
 	}
+	fmt.Println("--> updateRoot 2")
 	// Track the amount of time wasted on hashing the storage trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
 	}
 	s.data.Root = s.trie.Hash()
+	fmt.Println("--> updateRoot done")
 }
 
 // CommitTrie the storage trie of the object to db.
@@ -493,6 +578,7 @@ func (s *stateObject) CommitTrie(db Database) (int, error) {
 	if s.updateTrie(db) == nil {
 		return 0, nil
 	}
+	fmt.Println("--> CommitTrie 2")
 	if s.dbErr != nil {
 		return 0, s.dbErr
 	}
