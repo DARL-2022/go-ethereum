@@ -131,6 +131,9 @@ func (t *odrTrie) TryGetAll_SetKey(firstKey, lastKey []byte) ([][]byte, []common
 // temp function for correct build, this will not be called in Ethane (joonha)
 func (t *odrTrie) Print() {}
 
+// temp function for correct build, this will not be called in Ethane (joonha)
+func (t *odrTrie) Print_storageTrie() {}
+
 
 func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	key = crypto.Keccak256(key)

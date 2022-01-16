@@ -221,6 +221,11 @@ func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
 
 // GetCommittedState retrieves a value from the committed account storage trie.
 func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
+
+	fmt.Println("\n/******************************/")
+	fmt.Println("// GETCOMMITTEDSTATE")
+	fmt.Println("/******************************/")
+
 	// If the fake storage is set, only lookup the state here(in the debugging mode)
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
@@ -265,9 +270,105 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
 		
 		// (joonha)
-		fmt.Println("\n/////////////\n//  ^   ^  //\n//    O    //\n/////////////\n")
-		fmt.Println("s.addrHash: ", s.addrHash)
-		fmt.Println("key: ", key)
+		// fmt.Println("\n/////////////\n//  ^   ^  //\n//    O    //\n/////////////\n")
+		fmt.Println("account addrHash: ", s.addrHash)
+		fmt.Println("slot key: ", key)
+		fmt.Println("(SNAPSHOT)enc: ", enc)
+	}
+
+	// hashing (joonha)
+	if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
+		s.setError(err)
+		return common.Hash{}
+	}
+	fmt.Println("(NO SNAPSHOT)enc: ", enc, "\n\n") // --> no snapshot
+
+
+
+
+	// If snapshot unavailable or reading from it failed, load from the database
+	if s.db.snap == nil || err != nil {
+		if meter != nil {
+			// If we already spent time checking the snapshot, account for it
+			// and reset the readStart
+			*meter += time.Since(readStart)
+			readStart = time.Now()
+		}
+		if metrics.EnabledExpensive {
+			meter = &s.db.StorageReads
+		}
+		if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil { 
+			s.setError(err)
+			return common.Hash{}
+		}
+	}
+	var value common.Hash
+	if len(enc) > 0 {
+		_, content, _, err := rlp.Split(enc)
+		if err != nil {
+			s.setError(err)
+		}
+		value.SetBytes(content)
+	}
+	s.originStorage[key] = value
+	return value
+}
+
+// (joonha)
+func (s *stateObject) GetCommittedState_hashedKey(db Database, key common.Hash) common.Hash {
+
+	fmt.Println("\n/******************************/")
+	fmt.Println("// GETCOMMITTEDSTATE_HASHEDKEY")
+	fmt.Println("/******************************/")
+
+	// If the fake storage is set, only lookup the state here(in the debugging mode)
+	if s.fakeStorage != nil {
+		return s.fakeStorage[key]
+	}
+	// If we have a pending write or clean cached, return that
+	if value, pending := s.pendingStorage[key]; pending {
+		return value
+	}
+	if value, cached := s.originStorage[key]; cached {
+		return value
+	}
+	// If no live objects are available, attempt to use snapshots
+	var (
+		enc   []byte
+		err   error
+		meter *time.Duration
+	)
+	readStart := time.Now()
+	if metrics.EnabledExpensive {
+		// If the snap is 'under construction', the first lookup may fail. If that
+		// happens, we don't want to double-count the time elapsed. Thus this
+		// dance with the metering.
+		defer func() {
+			if meter != nil {
+				*meter += time.Since(readStart)
+			}
+		}()
+	}
+	if s.db.snap != nil {
+		if metrics.EnabledExpensive {
+			meter = &s.db.SnapshotStorageReads
+		}
+		// If the object was destructed in *this* block (and potentially resurrected),
+		// the storage has been cleared out, and we should *not* consult the previous
+		// snapshot about any storage values. The only possible alternatives are:
+		//   1) resurrect happened, and new slot values were set -- those should
+		//      have been handles via pendingStorage above.
+		//   2) we don't have new values, and can deliver empty response back
+		if _, destructed := s.db.snapDestructs[s.addrHash]; destructed {
+			return common.Hash{}
+		}
+		// enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes())) // --> original code
+		enc, err = s.db.snap.Storage(s.addrHash, key) // (joonha)
+		
+		// (joonha)
+		// fmt.Println("\n/////////////\n//  ^   ^  //\n//    O    //\n/////////////\n")
+		fmt.Println("account addrHash: ", s.addrHash)
+		fmt.Println("slot key: ", key)
 		fmt.Println("(SNAPSHOT)enc: ", enc)
 	}
 
@@ -292,7 +393,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if metrics.EnabledExpensive {
 			meter = &s.db.StorageReads
 		}
-		if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil { 
+		if enc, err = s.getTrie(db).TryGet_SetKey(key.Bytes()); err != nil { 
 			s.setError(err)
 			return common.Hash{}
 		}
@@ -385,6 +486,11 @@ func (s *stateObject) finalise(prefetch bool) {
 // updateTrie writes cached storage modifications into the object's storage trie.
 // It will return nil if the trie has not been loaded and no changes have been made
 func (s *stateObject) updateTrie(db Database) Trie {
+
+	fmt.Println("\n/******************************/")
+	fmt.Println("// UPDATETRIE")
+	fmt.Println("/******************************/")
+
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise(false) // Don't prefetch anymore, pull directly if need be
 	if len(s.pendingStorage) == 0 {
@@ -402,21 +508,13 @@ func (s *stateObject) updateTrie(db Database) Trie {
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
 	
-	fmt.Println("joonha 2022 1")
 
-	// debugging (joonha)
-	for slotKey, slotValue := range s.db.snapStorage[s.addrHash] {
-		fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
-	} 
+	// // debugging (joonha)
+	// for slotKey, slotValue := range s.db.snapStorage[s.addrHash] {
+	// 	fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
+	// } 
 	
 	for key, value := range s.pendingStorage { 
-		fmt.Println("  ^^^^^^^^^^^^^^^^^^")
-		fmt.Println("<<                  >>")
-		fmt.Println("  vvvvvvvvvvvvvvvvvv")
-		fmt.Println("  ^^^^^^^^^^^^^^^^^^")
-		fmt.Println("<<                  >>")
-		fmt.Println("  vvvvvvvvvvvvvvvvvv")
-		fmt.Println("joonha 2022 2")
 
 		// Skip noop changes, persist actual changes
 		if value == s.originStorage[key] {
@@ -435,21 +533,17 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			s.db.StorageUpdated += 1
 		}
 		// If state snapshotting is active, cache the data til commit
-		fmt.Println("joonha 2022 3")
 		if s.db.snap != nil {
-			fmt.Println("joonha 2022 4")
 			if storage == nil { 
-				fmt.Println("joonha 2022 5")
 				// Retrieve the old storage map, if available, create a new one otherwise
 				if storage = s.db.snapStorage[s.addrHash]; storage == nil {
-					fmt.Println("joonha 2022 5-1")
 					storage = make(map[common.Hash][]byte)
 					s.db.snapStorage[s.addrHash] = storage
 				}
 			} 
-			fmt.Println("joonha 2022 6")
 			storage[crypto.HashData(hasher, key[:])] = v // v will be nil if value is 0x00
 			// storage[key] = v
+			fmt.Println("key: ", key)
 			fmt.Println("storage[crypto.HashData(hasher, key[:])]: ", storage[crypto.HashData(hasher, key[:])])
 			// fmt.Println("storage[key]: ", storage[key])
 			fmt.Println("v: ", v,  "\n\n")
@@ -463,7 +557,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// 	fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
 	// } 
 
-	fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
+	// fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.data.Root, usedStorage)
 	}
@@ -475,6 +569,11 @@ func (s *stateObject) updateTrie(db Database) Trie {
 
 // updateTrie_hashedKey updates trie with already hashed key (joonha)
 func (s *stateObject) updateTrie_hashedKey(db Database) Trie {
+
+	fmt.Println("\n/******************************/")
+	fmt.Println("// UPDATETRIE_HASHEDKEY")
+	fmt.Println("/******************************/")
+
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise(false) // Don't prefetch any more, pull directly if need be
 	if len(s.pendingStorage) == 0 {
@@ -492,21 +591,13 @@ func (s *stateObject) updateTrie_hashedKey(db Database) Trie {
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
 	
-	fmt.Println("joonha 2022 1")
 
-	// debugging (joonha)
-	for slotKey, slotValue := range s.db.snapStorage[s.addrHash] {
-		fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
-	} 
+	// // debugging (joonha)
+	// for slotKey, slotValue := range s.db.snapStorage[s.addrHash] {
+	// 	fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
+	// } 
 	
 	for key, value := range s.pendingStorage { 
-		fmt.Println("  ^^^^^^^^^^^^^^^^^^")
-		fmt.Println("<<                  >>")
-		fmt.Println("  vvvvvvvvvvvvvvvvvv")
-		fmt.Println("  ^^^^^^^^^^^^^^^^^^")
-		fmt.Println("<<                  >>")
-		fmt.Println("  vvvvvvvvvvvvvvvvvv")
-		fmt.Println("joonha 2022 2")
 
 		// Skip noop changes, persist actual changes
 		if value == s.originStorage[key] {
@@ -516,36 +607,33 @@ func (s *stateObject) updateTrie_hashedKey(db Database) Trie {
 
 		var v []byte
 		if (value == common.Hash{}) {
-			s.setError(tr.TryDelete(key[:]))
+			// s.setError(tr.TryDelete(key[:])) // --> original code
+			s.setError(tr.TryUpdate_SetKey(key[:], nil)) // (joonha)
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			s.setError(tr.TryUpdate(key[:], v)) // maybe related to storage trie update? (jmlee)
+			s.setError(tr.TryUpdate_SetKey(key[:], v)) // maybe related to storage trie update? (jmlee)
 		}
 		// If state snapshotting is active, cache the data til commit
-		fmt.Println("joonha 2022 3")
 		if s.db.snap != nil {
-			fmt.Println("joonha 2022 4")
 			if storage == nil { 
-				fmt.Println("joonha 2022 5")
 				// Retrieve the old storage map, if available, create a new one otherwise
 				if storage = s.db.snapStorage[s.addrHash]; storage == nil {
-					fmt.Println("joonha 2022 5-1")
 					storage = make(map[common.Hash][]byte)
 					s.db.snapStorage[s.addrHash] = storage
 				}
 			} 
-			fmt.Println("joonha 2022 6")
 			// storage[crypto.HashData(hasher, key[:])] = v // v will be nil if value is 0x00
 			storage[key] = v
 			// fmt.Println("storage[crypto.HashData(hasher, key[:])]: ", storage[crypto.HashData(hasher, key[:])])
+			fmt.Println("key: ", key)
 			fmt.Println("storage[key]: ", storage[key])
 			fmt.Println("v: ", v,  "\n\n")
 		}
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
 	}
 
-	fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
+	// fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.data.Root, usedStorage)
 	}
@@ -557,18 +645,20 @@ func (s *stateObject) updateTrie_hashedKey(db Database) Trie {
 
 // UpdateRoot sets the trie root to the current root hash of
 func (s *stateObject) updateRoot(db Database) {
-	fmt.Println("--> updateRoot 1")
+
+	fmt.Println("\n/******************************/")
+	fmt.Println("// UPDATEROOT")
+	fmt.Println("/******************************/")
+
 	// If nothing changed, don't bother with hashing anything
 	if s.updateTrie(db) == nil {
 		return
 	}
-	fmt.Println("--> updateRoot 2")
 	// Track the amount of time wasted on hashing the storage trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
 	}
 	s.data.Root = s.trie.Hash()
-	fmt.Println("--> updateRoot done")
 }
 
 // CommitTrie the storage trie of the object to db.
@@ -578,7 +668,6 @@ func (s *stateObject) CommitTrie(db Database) (int, error) {
 	if s.updateTrie(db) == nil {
 		return 0, nil
 	}
-	fmt.Println("--> CommitTrie 2")
 	if s.dbErr != nil {
 		return 0, s.dbErr
 	}
@@ -761,5 +850,20 @@ func NewObject(db *StateDB, address common.Address, data Account) *stateObject {
 		data:          data,
 		originStorage: make(Storage),
 		dirtyStorage:  make(Storage),
+	}
+}
+
+// DeleteSlot deletes slot given the slotKey (joonha)
+func (s *stateObject) DeleteSlot(slotKey common.Hash) {
+	s.trie.TryUpdate_SetKey(slotKey[:], nil)
+}
+
+// Print_storageTrie prints storage trie (joonha)
+func (s *stateObject) Print_storageTrie() {
+	fmt.Println("state_object > Print Storage > 1")
+	if s.trie == nil {
+		return 
+	} else {
+		s.trie.Print_storageTrie()
 	}
 }

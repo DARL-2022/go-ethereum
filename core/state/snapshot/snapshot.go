@@ -410,7 +410,11 @@ func (t *Tree) StorageList_ethane(blockRoot, accountHash common.Hash) []common.H
 	// diff, _ := snap.(*diffLayer)
 	// return diff.StorageList(accountHash) // ref: difflayer.go
 
-	fmt.Println("\ncalling StorageList_ethane()")
+	fmt.Println("\n/******************************/")
+	fmt.Println("// STORAGELIST_ETHANE")
+	fmt.Println("/******************************/")
+
+	// fmt.Println("\ncalling StorageList_ethane()")
 	var storageList []common.Hash
 
 	if t.Snapshots(blockRoot, 128, true) == nil {
@@ -418,14 +422,14 @@ func (t *Tree) StorageList_ethane(blockRoot, accountHash common.Hash) []common.H
 	}
 
 	for _, snap := range t.Snapshots(blockRoot, 128, true) { // whether to find in diskLayer
-		fmt.Println("\n\nsnap >>> ", snap)
+		// fmt.Println("\n\nsnap >>> ", snap)
 		diff, _ := snap.(*diffLayer)
 		val, _ := diff.StorageList(accountHash)
-		fmt.Println("val >>> ", val)
+		// fmt.Println("val >>> ", val)
 		storageList = append(storageList, val...)
-		fmt.Println("storageList >>> ", storageList, "\n\n")
+		// fmt.Println("storageList >>> ", storageList, "\n\n")
 	}
-	fmt.Println("StorageList_ethane() done\n")
+	// fmt.Println("StorageList_ethane() done\n")
 	return storageList
 }
 
@@ -437,32 +441,36 @@ func (t *Tree) AccountList_ethane(blockRoot common.Hash) []common.Hash {
 	// diff, _ := snap.(*diffLayer)
 	// return diff.AccountList() // ref: difflayer.go
 
-	fmt.Println("\ncalling AccountList_ethane()")
+	fmt.Println("\n/******************************/")
+	fmt.Println("// ACCOUNTLIST_ETHANE")
+	fmt.Println("/******************************/")
+
+	// fmt.Println("\ncalling AccountList_ethane()")
 	var accountList []common.Hash
 
-	tmpSnap := t.Snapshot(blockRoot)
-	fmt.Println("(1)")
-	tmpDiff, _ := tmpSnap.(*diffLayer)
-	fmt.Println("(2)")
-	if tmpDiff != nil {
-		fmt.Println("tmp_val >>> ", tmpDiff.AccountList())
-	} else {
-		fmt.Println("tmpDiff is nil")
-	}
-	fmt.Println("(3)")
+	// tmpSnap := t.Snapshot(blockRoot)
+	// fmt.Println("(1)")
+	// tmpDiff, _ := tmpSnap.(*diffLayer)
+	// fmt.Println("(2)")
+	// if tmpDiff != nil {
+	// 	fmt.Println("tmp_val >>> ", tmpDiff.AccountList())
+	// } else {
+	// 	fmt.Println("tmpDiff is nil")
+	// }
+	// fmt.Println("(3)")
 
 	if t.Snapshots(blockRoot, 128, true) == nil {
 		fmt.Println("Snapshots are nil")
 	}
 	
 	for _, snap := range t.Snapshots(blockRoot, 128, true) { // whether to find in diskLayer
-		fmt.Println("\n\nsnap >>> ", snap)
+		// fmt.Println("\n\nsnap >>> ", snap)
 		diff, _ := snap.(*diffLayer)
 		val := diff.AccountList()
-		fmt.Println("val >>> ", val, "\n\n")
+		// fmt.Println("val >>> ", val, "\n\n")
 		accountList = append(accountList, val...)
 	}
-	fmt.Println("AccountList_ethane() done\n")
+	// fmt.Println("AccountList_ethane() done\n")
 	return accountList
 }
 
