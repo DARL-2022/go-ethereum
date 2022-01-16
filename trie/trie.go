@@ -723,6 +723,23 @@ func (t *Trie) Print() {
 	fmt.Println(t.root.toString("", t.db))
 }
 
+func (t *Trie) Print_storageTrie() {
+
+	fmt.Println("trie > Print Storage > 1")
+	if t == nil {
+		return 
+	}
+	fmt.Println("trie > Print Storage > 2")
+
+	if t.root != nil {
+		fmt.Println(t.root.toString_storageTrie("", t.db))
+	} else {
+		fmt.Println("trie's root is nil")
+	}
+	fmt.Println("trie > Print Storage > 3")
+
+}
+
 // get trie's db size (jmlee)
 func (t *Trie) Size() common.StorageSize {
 	size, _ := t.db.Size()

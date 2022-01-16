@@ -32,6 +32,7 @@ type node interface {
 	fstring(string) string
 	cache() (hashNode, bool)
 	toString(string, *Database) string // print node details in human readable form (jmlee)
+	toString_storageTrie(string, *Database) string // (joonha)
 }
 
 type (
@@ -277,4 +278,55 @@ func (n valueNode) toString(ind string, db *Database) string {
 	return fmt.Sprintf("Nonce:\t\t%d\n\t\tBalance:\t%s\n\t\tstorageRoot:\t%s\n\t\tcodeHash:\t%x\n\t\taddr:\t\t%s\n\t\tkey:\t\t%s\n", acc.Nonce, acc.Balance.String(), acc.Root, acc.CodeHash, acc.Addr, common.AddrToKey[acc.Addr]) // print (joonha)
 
 	// inactive account여도 AddrToKey_inactive 가 아니라 AddrToKey 가 출력되고 있으니 주의! 
+}
+
+
+
+////////////////////////////////////////////////////////////
+// STORAGE TRIE PRINTING (joonha)
+//
+// 1. 우선 풀노드 해시까진 잘 나옴.
+// 2. 
+//
+func (n *fullNode) toString_storageTrie(ind string, db *Database) string {
+	fmt.Println("FULLNODE")
+	// print branch node
+	hashnode, _ := n.cache()
+	hash := common.BytesToHash(hashnode)
+	resp := fmt.Sprintf("[\n")
+	resp += fmt.Sprintf("%s fullNode - hash: %s\n", ind, hash.Hex())
+	for i, node := range &n.Children {
+		if node != nil{
+			resp += fmt.Sprintf("%s branch '%s':\n", ind, indices[i])
+			resp += fmt.Sprintf("%s	%v\n", ind, node.toString_storageTrie(ind+"	", db))
+		} 
+	}
+	return resp + fmt.Sprintf("\n%s] ", ind)
+}
+func (n *shortNode) toString_storageTrie(ind string, db *Database) string {
+	fmt.Println("SHORTNODE")
+	// print extension or leaf node
+	// if n.Val is branch node, then this node is extension node & n.Key is common prefix
+	// if n.Val is account, then this node is leaf node & n.Key is left address of the account (along the path)
+	hashnode, _ := n.cache()
+	hash := common.BytesToHash(hashnode)
+
+	return fmt.Sprintf("\n\t\tshortNode hash: %s, \n\t\tkey: %s \n\t\t%v", hash.Hex(), common.BytesToHash(n.Key), n.Val.toString_storageTrie(ind+"  ", db))
+}
+func (n hashNode) toString_storageTrie(ind string, db *Database) string {
+	fmt.Println("HASHNODE")
+	// resolve hashNode (get node from db)
+	hash := common.BytesToHash([]byte(n))
+	fmt.Println("hash: ", hash)
+	if node := db.node(hash); node != nil {
+		return node.toString_storageTrie(ind, db)
+	} else {
+		// error: should not reach here!
+		return fmt.Sprintf("<%x> ", []byte(n))
+	}
+}
+
+func (n valueNode) toString_storageTrie(ind string, db *Database) string {
+	fmt.Println("VALUENODE")
+	return fmt.Sprintf("\t\tn: ", []byte(n))
 }

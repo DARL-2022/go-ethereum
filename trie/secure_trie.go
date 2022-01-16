@@ -239,6 +239,12 @@ func (t *SecureTrie) Print() {
 	t.trie.Print()
 }
 
+// (joonha)
+func (t *SecureTrie) Print_storageTrie() {
+	fmt.Println("Secure trie > Print Storage > 1")
+	t.trie.Print_storageTrie()
+}
+
 // make empty secure trie (jmlee)
 func NewEmptySecure() *SecureTrie {
 	trie, _ := NewSecure(common.Hash{}, NewDatabase(memorydb.New()))
