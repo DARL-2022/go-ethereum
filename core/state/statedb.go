@@ -717,6 +717,11 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	addrKey_bigint.SetString(addrKey.Hex()[2:], 16)
 	// fmt.Println("addrKey_bigint:", addrKey_bigint.Int64(), "/ CheckpointKey:", s.CheckpointKey)
 	
+	fmt.Println("\n[Account]\nNonce: ", obj.data.Nonce)
+	fmt.Println("Balance: ", obj.data.Balance)
+	fmt.Println("CodeHash: ", obj.data.CodeHash)
+	fmt.Println("Root: ", obj.data.Root)
+	fmt.Println("Addr: ", obj.data.Addr)
 
 	// 여기를 좀 더 명확하게 만들 것.
 	if addrKey_bigint.Int64() >= s.CheckpointKey {
@@ -724,8 +729,6 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		/******************************************************/
 		// UPDATED AT THIS EPOCH
 		/******************************************************/
-		// 기존 것을 지우지도 않고, 옮기지도 않는 것인데 왜 우측에 새로 추가가 되고 있지?
-
 		// this address is newly created address OR already moved address. so just update
 		// fmt.Println("insert -> key:", addrKey.Hex(), "/ addr:", addr.Hex())
 		if err = s.trie.TryUpdate_SetKey(addrKey[:], data); err != nil {
@@ -766,7 +769,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		s.NextKey += 1
 
 	} else { // < InactiveBoundaryKey : creating a crumb or restoring by creating (joonha) 
-		// fmt.Println("\n\nupdateStateObject ----------> third case\n\n")
+		fmt.Println("\n\nupdateStateObject ----------> third case\n\n")
 		/***********************************************************/
 		// HAD BEEN INACTIVATED SO THIS SEEMS NEW TO ACTIVE TRIE
 		/***********************************************************/
@@ -1010,6 +1013,11 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 				if data.Root == (common.Hash{}) {
 					data.Root = emptyRoot
 				}
+				fmt.Println("\n(GDSO) Nonce: ", data.Nonce)
+				fmt.Println("(GDSO) Balance: ", data.Balance)
+				fmt.Println("(GDSO) CodeHash: ", data.CodeHash)
+				fmt.Println("(GDSO) Root: ", data.Root)
+				fmt.Println("(GDSO) Addr: ", data.Addr)
 			}
 		} else if restoring == 1 { // during restoring, should get the account from inactive trie database not using the snapshot
 			fmt.Println("getDeletedStateObject >> restoring = 1 >> get account from trie ")
@@ -1676,11 +1684,14 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				obj.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie
-			if err := obj.CommitTrie(s.db); err != nil { // --> storage update occurs here (joonha)
+			if err := obj.CommitTrie(s.db); err != nil {
 				return common.Hash{}, err
 			}
+			// printing storage trie (joonha)
 			fmt.Println("Print_storageTrie starts")
-			obj.Print_storageTrie() // (joonha)
+			fmt.Println("( account addr: ", obj.address, ")")
+			fmt.Println("( account addrHash: ", obj.addrHash, ")")
+			obj.Print_storageTrie()
 			fmt.Println("Print_storageTrie ends")
 		}
 		// debugging (joonha)
@@ -2235,6 +2246,11 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(snapRoot common.Hash, addr comm
 		s.SetState_Restore(addr, slotKey, common.BytesToHash(v))
 		temp[slotKey] = v
 	}
+	obj := s.getStateObject(addr) 
+	if obj != nil {
+		obj.CommitTrie_hashedKey(s.db)
+	}
+
 	// TODO
 	// 1. delete inactive snapshots (no need to delete'em from trie because they don't exist there!)
 	// 2. add to active snapshot (check if i should do this) -> 내가 해줘야 하는 것 맞음. 윗윗줄에서.
