@@ -311,7 +311,7 @@ func (n *shortNode) toString_storageTrie(ind string, db *Database) string {
 	hashnode, _ := n.cache()
 	hash := common.BytesToHash(hashnode)
 
-	return fmt.Sprintf("\n\t\tshortNode hash: %s, \n\t\tkey: %s \n\t\t%v", hash.Hex(), common.BytesToHash(n.Key), n.Val.toString_storageTrie(ind+"  ", db))
+	return fmt.Sprintf("\n\t\tshortNode hash: %s, \n\t\tkey: %x \n\t\t%v", hash.Hex(), common.BytesToHash(n.Key), n.Val.toString_storageTrie(ind+"  ", db))
 }
 func (n hashNode) toString_storageTrie(ind string, db *Database) string {
 	fmt.Println("HASHNODE")

@@ -12,7 +12,7 @@ contract SimpleStorage {
     function set(uint key, uint value) public {
         a = key;
         b[1] = value;
-        storageMap[key] = value;
+        // storageMap[key] = value;
     }
 
     function get(uint key) public view returns (uint) {

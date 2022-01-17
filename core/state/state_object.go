@@ -225,7 +225,6 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	fmt.Println("\n/******************************/")
 	fmt.Println("// GETCOMMITTEDSTATE")
 	fmt.Println("/******************************/")
-
 	// If the fake storage is set, only lookup the state here(in the debugging mode)
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
@@ -440,7 +439,7 @@ func (s *stateObject) SetState_Restore(db Database, key, value common.Hash) {
 		// prevalue: prev,
 	})
 	s.setState(key, value)
-	s.updateTrie_hashedKey(db)
+	// s.updateTrie_hashedKey(db)
 }
 
 // SetStorage replaces the entire state storage with the given one.
@@ -516,7 +515,9 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	
 	for key, value := range s.pendingStorage { 
 
-		// Skip noop changes, persist actual changes
+		hk := crypto.HashData(hasher, key[:]) // (joonha)
+
+		// Skip noop changes, persist actual changes // --> should this be changed too? (joonha)
 		if value == s.originStorage[key] {
 			continue
 		}
@@ -524,12 +525,16 @@ func (s *stateObject) updateTrie(db Database) Trie {
 
 		var v []byte
 		if (value == common.Hash{}) {
-			s.setError(tr.TryDelete(key[:]))
+			// s.setError(tr.TryDelete(key[:]))
+			s.setError(tr.TryUpdate_SetKey(hk[:], nil))
 			s.db.StorageDeleted += 1
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			s.setError(tr.MyTryUpdate(key[:], v, s.txHash, s.address))
+			// s.setError(tr.TryUpdate(key[:], v)) // --> original code 
+			// s.setError(tr.MyTryUpdate(key[:], v, s.txHash, s.address)) // jaehun's code
+			s.setError(tr.TryUpdate_SetKey(hk[:], v)) // TryUpdate's hashKey is modified for compactMPT so we use already hashed key to update trie (joonha)
+			// maybe related to storage trie update? (jmlee)
 			s.db.StorageUpdated += 1
 		}
 		// If state snapshotting is active, cache the data til commit
@@ -542,10 +547,9 @@ func (s *stateObject) updateTrie(db Database) Trie {
 				}
 			} 
 			storage[crypto.HashData(hasher, key[:])] = v // v will be nil if value is 0x00
-			// storage[key] = v
 			fmt.Println("key: ", key)
+			fmt.Println("crypto.HashData(hasher, key[:]): ", crypto.HashData(hasher, key[:]))
 			fmt.Println("storage[crypto.HashData(hasher, key[:])]: ", storage[crypto.HashData(hasher, key[:])])
-			// fmt.Println("storage[key]: ", storage[key])
 			fmt.Println("v: ", v,  "\n\n")
 		}
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
@@ -557,7 +561,8 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// 	fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
 	// } 
 
-	// fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
+	fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
+	fmt.Println("s.data.Root: ", s.data.Root)
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.data.Root, usedStorage)
 	}
@@ -623,9 +628,7 @@ func (s *stateObject) updateTrie_hashedKey(db Database) Trie {
 					s.db.snapStorage[s.addrHash] = storage
 				}
 			} 
-			// storage[crypto.HashData(hasher, key[:])] = v // v will be nil if value is 0x00
 			storage[key] = v
-			// fmt.Println("storage[crypto.HashData(hasher, key[:])]: ", storage[crypto.HashData(hasher, key[:])])
 			fmt.Println("key: ", key)
 			fmt.Println("storage[key]: ", storage[key])
 			fmt.Println("v: ", v,  "\n\n")
@@ -633,7 +636,8 @@ func (s *stateObject) updateTrie_hashedKey(db Database) Trie {
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
 	}
 
-	// fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
+	fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
+	fmt.Println("(updateTrie) s.data.Root: ", s.data.Root)
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.data.Root, usedStorage)
 	}
@@ -652,6 +656,7 @@ func (s *stateObject) updateRoot(db Database) {
 
 	// If nothing changed, don't bother with hashing anything
 	if s.updateTrie(db) == nil {
+		fmt.Println("nothing changed.")
 		return
 	}
 	// Track the amount of time wasted on hashing the storage trie
@@ -680,6 +685,29 @@ func (s *stateObject) CommitTrie(db Database) (int, error) {
 		s.data.Root = root
 	}
 	return committed, err
+}
+
+func (s *stateObject) CommitTrie_hashedKey(db Database) error {
+	fmt.Println("\n/******************************/")
+	fmt.Println("// COMMITTRIE_HASHEDKEY")
+	fmt.Println("/******************************/")
+
+	// If nothing changed, don't bother with hashing anything
+	if s.updateTrie_hashedKey(db) == nil {
+		return nil
+	}
+	if s.dbErr != nil {
+		return s.dbErr
+	}
+	// Track the amount of time wasted on committing the storage trie
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
+	}
+	root, err := s.trie.Commit(nil)
+	if err == nil {
+		s.data.Root = root
+	}
+	return err
 }
 
 // AddBalance adds amount to s's balance.
@@ -862,6 +890,7 @@ func (s *stateObject) DeleteSlot(slotKey common.Hash) {
 func (s *stateObject) Print_storageTrie() {
 	fmt.Println("state_object > Print Storage > 1")
 	if s.trie == nil {
+		fmt.Println("the storage trie is nil")
 		return 
 	} else {
 		s.trie.Print_storageTrie()
