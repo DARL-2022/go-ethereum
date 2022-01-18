@@ -51,7 +51,7 @@ type (
 	TransferFunc func(StateDB, common.Address, common.Address, *big.Int)
 	// Restore function should be defined here (joonha) (ethane)
 	// RestoreFunc is the signature of a restore function (jmlee)
-	RestoreFunc func(StateDB, common.Address, *big.Int, *big.Int, bool)
+	RestoreFunc func(StateDB, common.Address, *big.Int, []byte, *big.Int, bool)
 	// GetHashFunc returns the n'th block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
@@ -439,6 +439,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 				curAcc = &state.Account{}
 				rlp.DecodeBytes(acc, &curAcc)
 				accounts = append(accounts, curAcc)
+
+				// fmt.Println("curAcc: ", curAcc)
+				// fmt.Println("curAcc.CodeHash: ", curAcc.CodeHash)
+				resAcc.CodeHash = curAcc.CodeHash
 			}
 		}
 
@@ -498,8 +502,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		}
 
-		// 세 번째 인자로 최종 balance를 넘김.
-		evm.Context.Restore(evm.StateDB, inactiveAddr, resAcc.Balance, evm.Context.BlockNumber, isMerge) // restore balance
+		// fmt.Println("resAcc.CodeHash: ", resAcc.CodeHash)
+		evm.Context.Restore(evm.StateDB, inactiveAddr, resAcc.Balance, resAcc.CodeHash, evm.Context.BlockNumber, isMerge) // restore balance
 
 		/***************************************/
 		// RESTORE CA's STORAGE TRIE

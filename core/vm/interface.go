@@ -39,9 +39,6 @@ type StateDB interface {
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64)
 
-	// should SetAddr be added here? (joonha)
-	// 높은 확률로 필요 없을 듯.
-
 	GetCodeHash(common.Address) common.Hash
 	GetCode(common.Address) []byte
 	SetCode(common.Address, []byte)
@@ -91,6 +88,7 @@ type StateDB interface {
 	UpdateAlreadyRestoredDirty(common.Hash)
 	RemoveRestoredKeyFromAddrToKeyDirty_inactive(common.Address)
 	RebuildStorageTrieFromSnapshot(common.Hash, common.Address, common.Hash)
+	SetCode_Restore(common.Address, []byte)
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM
