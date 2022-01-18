@@ -17,7 +17,7 @@
 package rawdb
 
 import (
-	// "fmt"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -105,9 +105,18 @@ func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
 	// fmt.Println("write trie node -> node hash:", hash.Hex())
 }
 
+// flag(joonha)
 // DeleteTrieNode deletes the specified trie node from the database.
 func DeleteTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
+	fmt.Println("\n/*************************************************/")
+	fmt.Println("// rawdb >> accessors_state.go >> DELETETRIENODE")
+	fmt.Println("/***************************************************/")
+
+	fmt.Println("final deleting target hash: ", hash)
+
 	if err := db.Delete(hash.Bytes()); err != nil {
 		log.Crit("Failed to delete trie node", "err", err)
 	}
+
+	fmt.Println("DeleteTrieNode done.")
 }

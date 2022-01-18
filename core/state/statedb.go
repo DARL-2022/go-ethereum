@@ -789,7 +789,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		s.NextKey += 1
 
 	} else { // < InactiveBoundaryKey : creating a crumb or restoring by creating (joonha) 
-		fmt.Println("\n\nupdateStateObject ----------> third case\n\n")
+		// fmt.Println("\n\nupdateStateObject ----------> third case\n\n")
 		/***********************************************************/
 		// HAD BEEN INACTIVATED SO THIS SEEMS NEW TO ACTIVE TRIE
 		/***********************************************************/
@@ -891,9 +891,9 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 // to differentiate between non-existent/just-deleted, use getDeletedStateObject.
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 
-	fmt.Println("\n/***********************************/")
-	fmt.Println("// GETSTATEOBJECT")
-	fmt.Println("/***********************************/")
+	// fmt.Println("\n/***********************************/")
+	// fmt.Println("// GETSTATEOBJECT")
+	// fmt.Println("/***********************************/")
 
 	// if obj := s.getDeletedStateObject(addr); obj != nil && !obj.deleted { // --> original code
 	if obj := s.getDeletedStateObject(addr, 0); obj != nil && !obj.deleted { // get obj from the active trie (joonha)
@@ -904,9 +904,9 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 
 func (s *StateDB) getStateObject_FromInactiveTrie(addr common.Address) *stateObject {
 
-	fmt.Println("\n/***********************************/")
-	fmt.Println("// GETSTAEOBJECT_FROMINACTIVETRIE")
-	fmt.Println("/***********************************/")
+	// fmt.Println("\n/***********************************/")
+	// fmt.Println("// GETSTAEOBJECT_FROMINACTIVETRIE")
+	// fmt.Println("/***********************************/")
 
 	if obj := s.getDeletedStateObject(addr, 1); obj != nil && !obj.deleted { // get obj from the active trie (joonha)
 		return obj
@@ -1356,24 +1356,17 @@ func (s *StateDB) Copy() *StateDB {
 	// (joonha)
 	fmt.Println("len(s.AddrToKeyDirty_inactive): ", len(s.AddrToKeyDirty_inactive))
 	for key, _ := range s.AddrToKeyDirty_inactive {
-		// fmt.Println("I'm here 2 (joonha)") // (joonha)
 		// deep copy
 		for idx, value := range s.AddrToKeyDirty_inactive[key] {
-			// fmt.Println("I'm here 3 (joonha)") // (joonha)
 			_, doExist := state.AddrToKeyDirty_inactive[key]
 			if !doExist {
-				// fmt.Println("I'm here 3-1 (joonha)") // (joonha)
 				state.AddrToKeyDirty_inactive[key] = make([]common.Hash, len(s.AddrToKeyDirty_inactive[key]))
 			}
 			state.AddrToKeyDirty_inactive[key][idx] = value
-			// fmt.Println("I'm here 3-2 (joonha)") // (joonha)
 		}
-		// fmt.Println("I'm here 4 (joonha)") // (joonha)
 		if len(s.AddrToKeyDirty_inactive[key]) > 0 { 
-			// fmt.Println("I'm here 5 (joonha)") // (joonha)
 			state.AddrToKeyDirty_inactive[key] = state.AddrToKeyDirty_inactive[key][:len(s.AddrToKeyDirty_inactive[key])]
 		}
-		// fmt.Println("I'm here 6 (joonha)") // (joonha)
 		
 		_, ok := s.AddrToKeyDirty_inactive[key];
 		if !ok { // empty map
@@ -1576,6 +1569,10 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
+
+	fmt.Println("\n/***********************************/")
+	fmt.Println("// INTERMEDIATEROOT")
+	fmt.Println("/***********************************/")
 
 	// fmt.Println("state.IntermediateRoot() executed")
 	// Finalise all the dirty storage states and write them into the tries
@@ -2065,6 +2062,20 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			// fmt.Println("O: there is a leaf node at key", hash.Hex())
 			AccountsToInactivate = append(AccountsToInactivate, leafNode)
 			KeysToInactivate = append(KeysToInactivate, hash)
+
+			// to delete from disk, build KeysToDeleteFromDisk array
+			// account와 그에 상응하는 slotKeyList까지 모두 저장해야 함.
+			// common.KeysToDeleteFromDisk = append(common.KeysToDeleteFromDisk, hash)
+			_, doExist := common.KeysToDeleteFromDisk[hash]
+			if !doExist {
+				common.KeysToDeleteFromDisk[hash] = nil
+			} else {
+				// do nothing. 
+			}
+			_, doExist = common.AddrsToDeleteFromDisk[hash] 
+			if !doExist {
+				common.AddrsToDeleteFromDisk[hash] = leafNode
+			}
 		} else {
 			// fmt.Println("X: there is no leaf node at key", hash.Hex())
 		}
@@ -2151,6 +2162,8 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		// obj := s.stateObjects[common.BytesToAddress(AccountsToInactivate[index])]
 		temp := make(map[common.Hash][]byte)
 		for _, slotKey := range slotKeyList {
+
+			common.KeysToDeleteFromDisk[key] = append(common.KeysToDeleteFromDisk[key], slotKey)
 
 			// // TODO: delete slot of storage trie --> does state trie deletion do this all at once? (joonha)
 			// if obj == nil {
@@ -2317,4 +2330,10 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(snapRoot common.Hash, addr comm
 
 
 	fmt.Println("rebuilding storage trie done\n\n\n")
+}
+
+// GetStorageTrieDB returns stateObject's trie database (joonha)
+func (s *StateDB) GetStorageTrieDB(addr common.Address) *trie.Database {
+	obj := s.getStateObject_FromInactiveTrie(addr) 
+	return obj.getTrie(s.db).GetDB()
 }
