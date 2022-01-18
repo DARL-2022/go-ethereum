@@ -272,3 +272,8 @@ func (t *SecureTrie) InspectTrie() TrieInspectResult {
 func (t *SecureTrie) InspectStorageTrie() TrieInspectResult {
 	return t.trie.InspectStorageTrie()
 }
+
+// GetDB returns trie's db (joonha)
+func (t *SecureTrie) GetDB() *Database {
+	return t.trie.GetDB()
+}

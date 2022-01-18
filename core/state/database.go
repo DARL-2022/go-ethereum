@@ -114,6 +114,7 @@ type Trie interface {
 	TryGetAll_SetKey([]byte, []byte) ([][]byte, []common.Hash, error)
 	Print()
 	Print_storageTrie()
+	GetDB() *trie.Database 
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for

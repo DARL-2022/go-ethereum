@@ -1516,7 +1516,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 	// Commit all cached state changes into underlying memory database.
-	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
+	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number())) // here, statedb.go > Commit() being executed (joonha)
 	if err != nil {
 		return NonStatTy, err
 	}
@@ -1526,7 +1526,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if bc.cacheConfig.TrieDirtyDisabled {
 		// archive node는 여기에서 매 블록마다 trie nodes를 flush 시키는 거임 (jmlee)
 		// fmt.Println("archive node flush -> trie root:", root.Hex())
-		if err := triedb.Commit(root, false, nil); err != nil {
+		if err := triedb.Commit(root, false, nil); err != nil { // here, write trie changes to disk (joonha)
 			return NonStatTy, err
 		}
 	} else {
@@ -1560,7 +1560,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
 					}
 					// Flush an entire trie and restart the counters
-					triedb.Commit(header.Root, true, nil)
+					triedb.Commit(header.Root, true, nil) // here, write trie changes to disk (joonha)
 					lastWrite = chosen
 					bc.gcproc = 0
 				}
@@ -1576,6 +1576,31 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 		}
 	}
+
+	// delete leaf nodes from disk (joonha)
+	fmt.Println("\nBLOCK NUMBER: ", block.Header().Number.Int64())
+	if (block.Header().Number.Int64()) % common.DeleteLeafNodeEpoch == 0 { // at every delete epoch
+		fmt.Println("THIS IS THE DELETING EPOCH\n")
+		// TODO: incremental indexing is really bad. Modify this mechanism. (joonha)
+		// maybe altering the AddrsToDeleteFromDisk list into map might help.
+		i := 0
+		for accountHash, _ := range common.KeysToDeleteFromDisk {
+			// storage triedb
+			fmt.Println("accountHash: ", accountHash)
+			fmt.Println("common.BytesToAddress(common.AddrsToDeleteFromDisk[accountHash]): ", common.BytesToAddress(common.AddrsToDeleteFromDisk[accountHash]))
+			storageTrieDB := state.GetStorageTrieDB(common.BytesToAddress(common.AddrsToDeleteFromDisk[accountHash]))
+			// delete storage trie leaf nodes from disk
+			storageTrieDB.DeleteStorageTrieNode(common.KeysToDeleteFromDisk[accountHash])	
+			i++
+		}
+		// delete state trie leaf nodes from disk
+		triedb.DeleteStateTrieNode(common.KeysToDeleteFromDisk)
+		// empty the list
+		common.KeysToDeleteFromDisk = make(map[common.Hash][]common.Hash)
+	}
+
+
+
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf

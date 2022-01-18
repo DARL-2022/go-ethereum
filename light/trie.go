@@ -133,6 +133,11 @@ func (t *odrTrie) Print() {}
 // temp function for correct build, this will not be called in Ethane (joonha)
 func (t *odrTrie) Print_storageTrie() {}
 
+// temp function for correct build, this will not be called in Ethane (joonha)
+func (t *odrTrie) GetDB() *trie.Database {
+	return nil
+}
+
 
 func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	key = crypto.Keccak256(key)

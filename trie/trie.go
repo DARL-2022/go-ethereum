@@ -752,6 +752,11 @@ func NewEmpty() *Trie {
 	return trie
 }
 
+// GetDB returns trie's db (joonha)
+func (t *Trie) GetDB() *Database {
+	return t.db
+}
+
 func (t *Trie) MyCommit() {
 	// triedb.Commit(root, false, nil)
 	t.db.Commit(t.Hash(), false, nil)
