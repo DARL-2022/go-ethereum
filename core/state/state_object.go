@@ -501,13 +501,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	hasher := s.db.hasher
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
-	
-
-	// // debugging (joonha)
-	// for slotKey, slotValue := range s.db.snapStorage[s.addrHash] {
-	// 	fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
-	// } 
-	
+		
 	for key, value := range s.pendingStorage { 
 
 		hk := crypto.HashData(hasher, key[:]) // (joonha)
@@ -547,14 +541,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
 	}
 
-
-	// // debugging (joonha)
-	// for slotKey, slotValue := range s.db.snapStorage[s.addrHash] {
-	// 	fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
-	// } 
-
 	fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
-	fmt.Println("s.data.Root: ", s.data.Root)
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.data.Root, usedStorage)
 	}
@@ -587,12 +574,6 @@ func (s *stateObject) updateTrie_hashedKey(db Database) Trie {
 	// hasher := s.db.hasher
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
-	
-
-	// // debugging (joonha)
-	// for slotKey, slotValue := range s.db.snapStorage[s.addrHash] {
-	// 	fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
-	// } 
 	
 	for key, value := range s.pendingStorage { 
 
@@ -629,7 +610,6 @@ func (s *stateObject) updateTrie_hashedKey(db Database) Trie {
 	}
 
 	fmt.Println("USEDSTORAGE: ", usedStorage, "\n")
-	fmt.Println("(updateTrie) s.data.Root: ", s.data.Root)
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.data.Root, usedStorage)
 	}

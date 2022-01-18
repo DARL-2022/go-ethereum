@@ -113,7 +113,7 @@ func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) 
 
 // [Eth4ne]
 // Restore restores the inactive account (joonha)
-func Restore(db vm.StateDB, inactiveAddr common.Address, amount, blockNum *big.Int, isMerge bool) {
+func Restore(db vm.StateDB, inactiveAddr common.Address, amount *big.Int, codeHash []byte, blockNum *big.Int, isMerge bool) {
 	// set account balance with 0 (delete cached balance)
 	bal := db.GetBalance(inactiveAddr)
 	db.SubBalance(inactiveAddr, bal)
@@ -132,4 +132,8 @@ func Restore(db vm.StateDB, inactiveAddr common.Address, amount, blockNum *big.I
 		newNonce.Mul(blockNum, big.NewInt(64))
 		db.SetNonce(inactiveAddr, newNonce.Uint64())
 	}
+
+	// restore codeHash
+	// fmt.Println("(RESTORING)codeHash: ", codeHash)
+	db.SetCode_Restore(inactiveAddr, codeHash)
 }

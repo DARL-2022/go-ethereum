@@ -593,6 +593,14 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	}
 }
 
+// hashing code is not needed during restoring (joonha)
+func (s *StateDB) SetCode_Restore(addr common.Address, code []byte) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetCode(common.BytesToHash(code), code)
+	}
+}
+
 // (joonha)
 func (s *StateDB) SetAddr(addr common.Address) {
 	stateObject := s.GetOrNewStateObject(addr)
@@ -2108,21 +2116,18 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		slotKeyList := s.snaps.StorageList_ethane(snapRoot, key) // active snapshot's storage list (key is the accountHash to be deleted)
 		fmt.Println("slotKeyList: ", slotKeyList)
 		// fmt.Println("key: ", key)
-		obj := s.getStateObject(common.BytesToAddress(AccountsToInactivate[index]))
+		// obj := s.getStateObject(common.BytesToAddress(AccountsToInactivate[index]))
 		// obj := s.stateObjects[common.BytesToAddress(AccountsToInactivate[index])]
 		temp := make(map[common.Hash][]byte)
 		for _, slotKey := range slotKeyList {
 
-			// TODO: delete slot of storage trie
-			if obj == nil {
-				fmt.Println("(1) No object detected to delete slots from")
-			} else { // obj != nil
-				fmt.Println("(1) Object detected to deleted slots from")
-				obj.DeleteSlot(slotKey)
-			}
-
-			// 여기서 inactivate를 해도 updateTrie(스토리지 트라이를 업데이트하는 함수)를 콜하지 않는 것 같다.
-			// 아니 근데 왜 여기서 delete slot을 하고 말고가 원래 스토리지 트라이 루트에 영향을 끼치는 것인가. 
+			// // TODO: delete slot of storage trie --> does state trie deletion do this all at once? (joonha)
+			// if obj == nil {
+			// 	fmt.Println("(1) No object detected to delete slots from")
+			// } else { // obj != nil
+			// 	fmt.Println("(1) Object detected to deleted slots from")
+			// 	obj.DeleteSlot(slotKey)
+			// }
 
 			fmt.Println("slotKey is ", slotKey)
 			v, _ := s.snap.Storage(key, slotKey) 
@@ -2131,13 +2136,13 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		}
 		s.snapStorage_inactive[keyToInsert] = temp
 		
-		// apply storage trie change
-		if obj == nil {
-			fmt.Println("(2) No object detected to delete slots from")
-		} else { // obj != nil
-			fmt.Println("(2) Object detected to deleted slots from")
-			obj.CommitTrie(s.db) //////// it should be altered to _hashedKey... 
-		}
+		// // apply storage trie change
+		// if obj == nil {
+		// 	fmt.Println("(2) No object detected to delete slots from")
+		// } else { // obj != nil
+		// 	fmt.Println("(2) Object detected to deleted slots from")
+		// 	obj.CommitTrie(s.db) //////// should be altered to _hashedKey...?
+		// }
 
 		// DELETE:
 		s.snapDestructs[key] = struct{}{}
