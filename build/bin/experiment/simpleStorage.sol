@@ -22,4 +22,6 @@ contract SimpleStorage {
     function mapLocation(uint256 slot, uint256 key) public pure returns (uint256) {
         return uint256(keccak256(abi.encodePacked(key, slot)));
     }
+
+    function () external payable {}
 }
