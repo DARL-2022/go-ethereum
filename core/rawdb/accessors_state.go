@@ -83,8 +83,10 @@ func DeleteCode(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// flag (joonha)
 // ReadTrieNode retrieves the trie node of the provided hash.
 func ReadTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
+	fmt.Println("TRIE > DATABASE > NODE > READTRIENODE (DISK)")
 	data, _ := db.Get(hash.Bytes())
 	return data
 }
@@ -108,7 +110,7 @@ func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
 // flag(joonha)
 // DeleteTrieNode deletes the specified trie node from the database.
 func DeleteTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
-	fmt.Println("\n/*************************************************/")
+	fmt.Println("\n/***************************************************/")
 	fmt.Println("// rawdb >> accessors_state.go >> DELETETRIENODE")
 	fmt.Println("/***************************************************/")
 

@@ -2062,20 +2062,6 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			// fmt.Println("O: there is a leaf node at key", hash.Hex())
 			AccountsToInactivate = append(AccountsToInactivate, leafNode)
 			KeysToInactivate = append(KeysToInactivate, hash)
-
-			// to delete from disk, build KeysToDeleteFromDisk array
-			// account와 그에 상응하는 slotKeyList까지 모두 저장해야 함.
-			// common.KeysToDeleteFromDisk = append(common.KeysToDeleteFromDisk, hash)
-			_, doExist := common.KeysToDeleteFromDisk[hash]
-			if !doExist {
-				common.KeysToDeleteFromDisk[hash] = nil
-			} else {
-				// do nothing. 
-			}
-			_, doExist = common.AddrsToDeleteFromDisk[hash] 
-			if !doExist {
-				common.AddrsToDeleteFromDisk[hash] = leafNode
-			}
 		} else {
 			// fmt.Println("X: there is no leaf node at key", hash.Hex())
 		}
@@ -2093,6 +2079,10 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 	// move inactive leaf nodes to left
 	// for index, _ := range KeysToInactivate { // DFS
 	for index, key := range KeysToInactivate { // naive
+
+		// to delete storage trie from disk
+		addr := common.BytesToAddress(AccountsToInactivate[index])
+		common.AccountsToDeleteFromDisk = append(common.AccountsToDeleteFromDisk, addr)
 
 		// comment out when DFS
 		// delete inactive leaf node --> changed to deleting during DFS (joonha)
@@ -2162,8 +2152,6 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		// obj := s.stateObjects[common.BytesToAddress(AccountsToInactivate[index])]
 		temp := make(map[common.Hash][]byte)
 		for _, slotKey := range slotKeyList {
-
-			common.KeysToDeleteFromDisk[key] = append(common.KeysToDeleteFromDisk[key], slotKey)
 
 			// // TODO: delete slot of storage trie --> does state trie deletion do this all at once? (joonha)
 			// if obj == nil {
@@ -2332,8 +2320,29 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(snapRoot common.Hash, addr comm
 	fmt.Println("rebuilding storage trie done\n\n\n")
 }
 
-// GetStorageTrieDB returns stateObject's trie database (joonha)
-func (s *StateDB) GetStorageTrieDB(addr common.Address) *trie.Database {
+// // GetStorageTrieDB returns stateObject's storage trie database (joonha)
+// func (s *StateDB) GetStorageTrieDB(addr common.Address) *trie.Database {
+// 	obj := s.getStateObject_FromInactiveTrie(addr) 
+// 	fmt.Println(">>> GetStorageTrieDB")
+// 	fmt.Println("obj.data: ", obj.data)
+// 	fmt.Println("obj.trie: ", obj.trie) // why is it nil?
+// 	fmt.Println("obj.getTrie(s.db): ", obj.getTrie(s.db))
+// 	openedTrie, _ := s.db.OpenStorageTrie(obj.addrHash, obj.data.Root)
+// 	fmt.Println("openedTrie: ", openedTrie)
+	
+// 	// return obj.getTrie(s.db).GetDB()
+// 	return openedTrie.GetDB()
+// }
+
+// func (s *StateDB) GetStateObject_FromInactiveTrie(addr common.Address) *stateObject {
+// 	return s.getStateObject_FromInactiveTrie(addr)
+// }
+
+// func (s *StateDB) GetNodeFromDisk (hash common.Hash) {
+
+// }
+
+func (s *StateDB) GetTrie(addr common.Address) Trie {
 	obj := s.getStateObject_FromInactiveTrie(addr) 
-	return obj.getTrie(s.db).GetDB()
+	return obj.getTrie(s.db)
 }

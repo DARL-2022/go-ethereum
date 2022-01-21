@@ -51,6 +51,7 @@ fullnode.eth.defaultAccount = fullnode.eth.coinbase
 # simpleStorage2.sol smart contract
 # put employ code to geth console & start mining => then we will get contract address
 CONTRACTADDR = Web3.toChecksumAddress("0xe4f853b9d237b220f0ECcdf55d224c54a30032Df")
+# CONTRACTADDR = Web3.toChecksumAddress("0x5dB736fCfB2c034363388f55a9e5c798bC04Eae2")
 abiString = '[ { "constant": false, "inputs": [ { "name": "key", "type": "uint256" }, { "name": "value", "type": "uint256" } ], "name": "set", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": true, "inputs": [ { "name": "", "type": "uint256" } ], "name": "storageMap", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [ { "name": "key", "type": "uint256" } ], "name": "get", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [ { "name": "slot", "type": "uint256" }, { "name": "key", "type": "uint256" } ], "name": "mapLocation", "outputs": [ { "name": "", "type": "uint256" } ], "payable": false, "stateMutability": "view", "type": "function" } ]'
 CONTRACTABI = json.loads(abiString)
 CONTRACT = fullnode.eth.contract(address=CONTRACTADDR, abi=CONTRACTABI)
