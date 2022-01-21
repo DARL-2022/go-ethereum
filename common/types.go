@@ -88,8 +88,8 @@ var (
 	AddrToKey_inactive = make(map[Address][]Hash)
 
 	KeysToDelete = make([]Hash, 0) // store previous leaf nodes' keys to delete later
-	KeysToDeleteFromDisk = make(map[Hash][]Hash) // store previous leaf nodes' keys to delete later (joonha)
-	AddrsToDeleteFromDisk = make(map[Hash][]byte) // store previous leaf nodes(addr) to delete later (joonha)
+	AccountsToDeleteFromDisk = make([]Address, 0) // store previous leaf nodes' keys to delete later (joonha)
+	// AddrsToDeleteFromDisk = make(map[Hash][]byte) // store previous leaf nodes(addr) to delete later (joonha)
 	DeleteLeafNodeEpoch = int64(3) // block epoch to delete previous leaf nodes (from active area to temp area) (const)
 	// DeleteLeafNodeEpoch = big.NewInt(3) // block epoch to delete previous leaf nodes (& inactivate inactive leaf nodes) (const)
 	DoDeleteLeafNode bool // flag to determine whether to delete leaf nodes or not

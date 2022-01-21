@@ -410,9 +410,11 @@ func (db *Database) node(hash common.Hash) node {
 	return mustDecodeNode(hash[:], enc)
 }
 
+// flag (joonha) --> finding from both memory and disk
 // Node retrieves an encoded cached trie node from memory. If it cannot be found
 // cached, the method queries the persistent database for the content.
 func (db *Database) Node(hash common.Hash) ([]byte, error) {
+	fmt.Println("TRIE > DATABASE > NODE 1")
 	// It doesn't make sense to retrieve the metaroot
 	if hash == (common.Hash{}) {
 		return nil, errors.New("not found")
@@ -425,6 +427,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 			return enc, nil
 		}
 	}
+	fmt.Println("TRIE > DATABASE > NODE 2")
 	// Retrieve the node from the dirty cache if available
 	db.lock.RLock()
 	dirty := db.dirties[hash]
@@ -437,6 +440,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	}
 	memcacheDirtyMissMeter.Mark(1)
 
+	fmt.Println("TRIE > DATABASE > NODE 3")
 	// Content unavailable in memory, attempt to retrieve from disk
 	enc := rawdb.ReadTrieNode(db.diskdb, hash)
 	if len(enc) != 0 {
@@ -447,6 +451,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 		}
 		return enc, nil
 	}
+	fmt.Println("TRIE > DATABASE > NODE 4 > NOT FOUND")
 	return nil, errors.New("not found")
 }
 
@@ -906,20 +911,20 @@ func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, st
 	}
 }
 
-// delete state trie leaf nodes when inactivate or restore (joonha)
-func (db *Database) DeleteStateTrieNode(keyList map[common.Hash][]common.Hash) {
-	fmt.Println("\n/***********************************/")
-	fmt.Println("// TRIE >> database.go >> DELETETRIENODE")
-	fmt.Println("/***********************************/")
+// // delete state trie leaf nodes when inactivate or restore (joonha)
+// func (db *Database) DeleteStateTrieNode(keyList map[common.Hash][]common.Hash) {
+// 	fmt.Println("\n/***********************************/")
+// 	fmt.Println("// TRIE >> database.go >> DELETETRIENODE")
+// 	fmt.Println("/***********************************/")
 
-	fmt.Println("deleting accountHash List: ", keyList)
+// 	fmt.Println("deleting accountHash List: ", keyList)
 
-	batch := db.diskdb.NewBatch()
-	for key, _ := range keyList {
-		fmt.Println("accountHash: ", key)
-		rawdb.DeleteTrieNode(batch, key)
-	}
-}
+// 	batch := db.diskdb.NewBatch()
+// 	for key, _ := range keyList {
+// 		fmt.Println("accountHash: ", key)
+// 		rawdb.DeleteTrieNode(batch, key)
+// 	}
+// }
 
 // delete storage trie leaf nodes when inactivate or restore (joonha)
 func (db *Database) DeleteStorageTrieNode(keyList []common.Hash) {
@@ -930,6 +935,44 @@ func (db *Database) DeleteStorageTrieNode(keyList []common.Hash) {
 	fmt.Println("deleting slotKey List: ", keyList)
 
 	batch := db.diskdb.NewBatch()
+
+	// // FROM CAP
+	// flushPreimages := db.preimagesSize > 4*1024*1024
+	// if flushPreimages {
+	// 	fmt.Println("DEL (1)")
+	// 	if db.preimages == nil {
+	// 		log.Error("Attempted to write preimages whilst disabled")
+	// 	} else {
+	// 		rawdb.WritePreimages(batch, db.preimages)
+	// 		if batch.ValueSize() > ethdb.IdealBatchSize {
+	// 			if err := batch.Write(); err != nil {
+	// 				// return err
+	// 				return 
+	// 			}
+	// 			batch.Reset()
+	// 		}
+	// 	}
+	// }
+
+	// // FROM COMMIT
+	// // Move all of the accumulated preimages into a write batch
+	// if db.preimages != nil {
+	// 	fmt.Println("DEL (2)")
+	// 	rawdb.WritePreimages(batch, db.preimages)
+	// 	if batch.ValueSize() > ethdb.IdealBatchSize {
+	// 		if err := batch.Write(); err != nil {
+	// 			// return err
+	// 		}
+	// 		batch.Reset()
+	// 	}
+	// 	// Since we're going to replay trie node writes into the clean cache, flush out
+	// 	// any batched pre-images before continuing.
+	// 	if err := batch.Write(); err != nil {
+	// 		// return err
+	// 	}
+	// 	batch.Reset()
+	// }
+
 	for _, key := range keyList {
 		fmt.Println("slotKey: ", key)
 		rawdb.DeleteTrieNode(batch, key)
