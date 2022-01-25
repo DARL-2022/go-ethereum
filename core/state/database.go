@@ -121,6 +121,7 @@ type Trie interface {
 	Print()
 	Print_storageTrie()
 	GetDB() *trie.Database 
+	Delete_storageTrie()
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for

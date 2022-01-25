@@ -1133,21 +1133,30 @@ func (t *Trie) Print() {
 	fmt.Println(t.root.toString("", t.db))
 }
 
+// Print_storageTrie print storage trie node details in human readable form (joonha)
 func (t *Trie) Print_storageTrie() {
-
-	fmt.Println("trie > Print Storage > 1")
 	if t == nil {
 		return 
 	}
-	fmt.Println("trie > Print Storage > 2")
-
 	if t.root != nil {
 		fmt.Println(t.root.toString_storageTrie("", t.db))
 	} else {
 		fmt.Println("trie's root is nil")
 	}
-	fmt.Println("trie > Print Storage > 3")
+}
 
+// Delete_storageTrie deletes storage trie's all nodes from disk (joonha)
+func (t *Trie) Delete_storageTrie() {
+	fmt.Println("Trie > Delete Storage > 1")
+	if t == nil {
+		fmt.Println("t is nil")
+		return 
+	}
+	if t.root != nil {
+		fmt.Println(t.root.delete_storageTrie("", t.db))
+	} else {
+		fmt.Println("trie's root is nil")
+	}
 }
 
 // get trie's db size (jmlee)

@@ -135,6 +135,9 @@ func (t *odrTrie) Print() {}
 func (t *odrTrie) Print_storageTrie() {}
 
 // temp function for correct build, this will not be called in Ethane (joonha)
+func (t *odrTrie) Delete_storageTrie() {}
+
+// temp function for correct build, this will not be called in Ethane (joonha)
 func (t *odrTrie) GetDB() *trie.Database {
 	return nil
 }

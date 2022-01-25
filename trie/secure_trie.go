@@ -367,10 +367,16 @@ func (t *SecureTrie) Print() {
 	t.trie.Print()
 }
 
-// (joonha)
+// Print_storageTrie print storage trie node details in human readable form (joonha)
 func (t *SecureTrie) Print_storageTrie() {
 	fmt.Println("Secure trie > Print Storage > 1")
 	t.trie.Print_storageTrie()
+}
+
+// Delete_storageTrie deletes storage trie's all nodes from disk (joonha)
+func (t *SecureTrie) Delete_storageTrie() {
+	fmt.Println("Secure trie > Delete Storage > 1")
+	t.trie.Delete_storageTrie()
 }
 
 // make empty secure trie (jmlee)
