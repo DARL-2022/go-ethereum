@@ -1649,40 +1649,19 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 			fmt.Println("addr: ", addr)
 
-			// 1. obj의 trie를 얻어온다.
+			// 1. get obj's storage trie
 			storageTrie := state.GetTrie(addr)
 			fmt.Println("storageTrie: ", storageTrie)
 
-			// 2. trie의 root로부터 traversing 하면서 노드를 하나씩 지워나간다. 
-			storageTrie.Print_storageTrie() // --> node traversal 을 시작하기 위해, node.go 까지 갈 수 있는지 확인함.
-			// 이제 Print_storageTrie 를 참고하여 노드를 발견할 때마다 삭제하면 됨. --> TODO
-			
-			// for debugging (executing ReadTrieNode())
-			fmt.Println("root: ", root)
-			enc, _ := triedb.Node(root) 
-			fmt.Println("(1) enc: ", enc)
+			fmt.Println("triedb: ", triedb)
 
-			// // delete storage trie leaf nodes from disk
-			// triedb.DeleteStorageTrieNode(common.AccountsToDeleteFromDisk[trieRoot])
-
+			// 2. delete every nodes found during trie traversing from disk
+			storageTrie.Delete_storageTrie() // --> secure_trie.go >> trie.go >> node.go
 		}
 
 		// empty the list
 		common.AccountsToDeleteFromDisk = make([]common.Address, 0)
 	}
-
-	// [알게된 것]
-	// 1. triedb 나 storageTrieDB 나 모두 같다. 하나의 DB를 가리킨다. 그리고 그곳에서 키는 겹치지 않는다.
-	// 2. DeleteTrieNode 함수는 문제 없이 잘 동작한다.
-	// 3. GlobalDB는 단순히 ethdb.Database를 가리키는 변수이므로 업데이트 대상이 아니다. (즉, 바뀐 것을 잘 보여준다.)
-	// 4. accountHash 와 addrHash 는 다름. 디스크의 키밸류 스토어는 accountHash 를 키로 함. 
-	// 
-	// [고쳐야 할 부분]
-	// 1. leaf 뿐만 아니라 intermediate nodes 도 지워야 한다. (storage trie 의 모든 노드들)
-	//    1-1. leaf 는 스냅샷에 저장하기에 지워도 되는 것임.
-	//
-	//
-
 
 	// print database inspect result (jmlee)
 	fmt.Println("block inserted -> blocknumber:", block.Header().Number.Int64())
@@ -1706,8 +1685,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		common.DoDeleteLeafNode = false
 	}
 
-	// set common.UsingInactiveStorageSnapshot (joonha)
-	// common.UsingInactiveStorageSnapshot = true 
 	// TODO(joonha) inactive storage snapshot의 동작은 현재 full.sh의 snapshot 옵션을 켠 상태에서만 유효함. 
 	// TODO(joonha) active account + stroage snapshot 의 경우에도 이와 같이 옵션화 해줘야 함.
 
