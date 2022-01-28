@@ -1992,74 +1992,39 @@ func (s *StateDB) DeletePreviousLeafNodes(keysToDelete []common.Hash) {
 
 }
 
+/**********************/
+// DFS 
+/**********************/
 // InactivateLeafNodes inactivates inactive accounts (i.e., move old leaf nodes to left) (jmlee)
 func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64) int64 {
 
 	fmt.Println("\n/***********************************/")
-	fmt.Println("// INACTIVATELEAFNODES")
+	fmt.Println("// INACTIVATELEAFNODES (DFS)")
 	fmt.Println("/***********************************/")
-
-	// TODO(joonha): when inactivate accounts, 
-	// 1. destroy active snapshot (account + slots): snapDestructs 을 이용하면 될 것 같음. 추후 Commit에서 반영되도록.
-	// 2. if the account is a Contract Account(CA), 
-	//    2-1. create inactive storage snapshot
-
-	// delete(s.snapAccounts, obj.addrHash) // delete this from snapshot's update list
-	// s.snapDestructs[obj.addrHash] = struct{}{} // add this to snapshot's delete list
-	// if common.UsingInactiveStorageSnapshot { /*if CA, create inactive storage snapshot*/ }
-	
-
 
 	fmt.Println("inspect trie to inactivate:", inactiveBoundaryKey, "~",lastKeyToCheck)
 	fmt.Println("trie root before inactivate leaf nodes:", s.trie.Hash().Hex())
 
-	// TODO: optimize this code, this is too naive -> done by DFS (joonha)
 	// normTrie := s.trie.GetTrie() // TODO: using this function, we can delete SecureTrie.***_SetKey functions
-	
-	// NAIVE solution 
-	AccountsToInactivate := make([][]byte, 0)
-	KeysToInactivate := make([]common.Hash, 0)
-	for i := inactiveBoundaryKey; i < lastKeyToCheck; i++ {
-		// check there is leaf node with this key
-		hash := common.Int64ToHash(i)
 
-		// leafNode, err := normTrie.TryGet(hash[:]) // original code by jmlee
-		leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
+	// DFS the non-nil account from the trie (joonha)
+	// secure_trie.go/TryGetAll_SetKey -> trie.go/TryGetAll -> trie.go/tryGetAll
+	firstKey := common.Int64ToHash(inactiveBoundaryKey)
+	lastKey := common.Int64ToHash(lastKeyToCheck)
+	AccountsToInactivate, KeysToInactivate, _ := s.trie.TryGetAll_SetKey(firstKey[:], lastKey[:])
 
-		// find inactive leaf node, append the key to the list
-		if leafNode != nil && err == nil {
-			// fmt.Println("O: there is a leaf node at key", hash.Hex())
-			AccountsToInactivate = append(AccountsToInactivate, leafNode)
-			KeysToInactivate = append(KeysToInactivate, hash)
-		} else {
-			// fmt.Println("X: there is no leaf node at key", hash.Hex())
-		}
-	}
-
-	// // DFS the non-nil account from the trie (joonha)
-	// // secure_trie.go/TryGetAll_SetKey -> trie.go/TryGetAll -> trie.go/tryGetAll
-	// firstKey := common.Int64ToHash(inactiveBoundaryKey)
-	// lastKey := common.Int64ToHash(lastKeyToCheck)
-	// AccountsToInactivate, KeysToInactivate, _ := s.trie.TryGetAll_SetKey(firstKey[:], lastKey[:])
-
+	fmt.Println("\n************************************************************************************")
 	fmt.Println("Accounts length: ", len(AccountsToInactivate))
 	fmt.Println("Keys length: ", len(KeysToInactivate))
+	fmt.Println("AccountsToInactivate: ", AccountsToInactivate)
+	fmt.Println("KeysToInactivate: ", KeysToInactivate)
 
 	// move inactive leaf nodes to left
-	// for index, _ := range KeysToInactivate { // DFS
-	for index, key := range KeysToInactivate { // naive
+	for index, key := range KeysToInactivate { 
 
 		// to delete storage trie from disk
 		addr := common.BytesToAddress(AccountsToInactivate[index])
 		common.AccountsToDeleteFromDisk = append(common.AccountsToDeleteFromDisk, addr)
-
-		// comment out when DFS
-		// delete inactive leaf node --> changed to deleting during DFS (joonha)
-		// fmt.Println("delete previous leaf node -> key:", key.Hex())
-		// fmt.Println("delete previous leaf node -> key:", key[:])
-		// if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
-		// 	s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
-		// }
 
 		// insert inactive leaf node to left
 		keyToInsert := common.Int64ToHash(inactiveBoundaryKey + int64(index))
@@ -2067,16 +2032,12 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		if err := s.trie.TryUpdate_SetKey(keyToInsert[:], AccountsToInactivate[index]); err != nil {
 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", keyToInsert[:], err))
 		} else {
-			// (joonha)
-			// fmt.Println("joonha 1")
 			
 			// apply inactivation result to AddrToKey 
 			// Q. Should this be applied to AddrToKey_Dirty?
 			common.AddrToKey[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
 			s.AddrToKeyDirty[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
 			
-			// fmt.Println("joonha 4")
-
 			// save the inactive account key info for later restoration 
 			_, doExist := s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])]
 			if !doExist {
@@ -2109,7 +2070,7 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 
 		// STORAGE:
 		snapRoot := s.snap.Root()
-		fmt.Println("snapRoot: ", snapRoot)
+		// fmt.Println("snapRoot: ", snapRoot)
 		
 		// accountList := s.snaps.AccountList_ethane(snapRoot) // handing in snapRoot
 		// fmt.Println("accountList: ", accountList) // key
@@ -2149,11 +2110,6 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		s.snapDestructs[key] = struct{}{}
 		delete(s.snapAccounts, key)
 		delete(s.snapStorage, key)
-
-		// DELETE ACCOUNT FROM TRIE
-		if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
-			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
-		}
 	}
 
 	// TODO(joonha) should delete intermediate nodes from the disk ()
@@ -2165,6 +2121,177 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 	// return # of inactivated accounts
 	return int64(len(KeysToInactivate))
 }
+
+// /**********************/
+// // NAIVE TRAVERSAL
+// /**********************/
+// // InactivateLeafNodes inactivates inactive accounts (i.e., move old leaf nodes to left) (jmlee)
+// func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64) int64 {
+
+// 	fmt.Println("\n/***********************************/")
+// 	fmt.Println("// INACTIVATELEAFNODES")
+// 	fmt.Println("/***********************************/")
+
+// 	// TODO(joonha): when inactivate accounts, 
+// 	// 1. destroy active snapshot (account + slots): snapDestructs 을 이용하면 될 것 같음. 추후 Commit에서 반영되도록.
+// 	// 2. if the account is a Contract Account(CA), 
+// 	//    2-1. create inactive storage snapshot
+
+// 	// delete(s.snapAccounts, obj.addrHash) // delete this from snapshot's update list
+// 	// s.snapDestructs[obj.addrHash] = struct{}{} // add this to snapshot's delete list
+// 	// if common.UsingInactiveStorageSnapshot { /*if CA, create inactive storage snapshot*/ }
+	
+// 	fmt.Println("inspect trie to inactivate:", inactiveBoundaryKey, "~",lastKeyToCheck)
+// 	fmt.Println("trie root before inactivate leaf nodes:", s.trie.Hash().Hex())
+
+// 	// TODO: optimize this code, this is too naive -> done by DFS (joonha)
+// 	// normTrie := s.trie.GetTrie() // TODO: using this function, we can delete SecureTrie.***_SetKey functions
+	
+// 	// NAIVE solution 
+// 	AccountsToInactivate := make([][]byte, 0)
+// 	KeysToInactivate := make([]common.Hash, 0)
+// 	for i := inactiveBoundaryKey; i < lastKeyToCheck; i++ {
+// 		// check there is leaf node with this key
+// 		hash := common.Int64ToHash(i)
+
+// 		// leafNode, err := normTrie.TryGet(hash[:]) // original code by jmlee
+// 		leafNode, err := s.trie.TryGet_SetKey(hash[:]) // (joonha)
+
+// 		// find inactive leaf node, append the key to the list
+// 		if leafNode != nil && err == nil {
+// 			// fmt.Println("O: there is a leaf node at key", hash.Hex())
+// 			AccountsToInactivate = append(AccountsToInactivate, leafNode)
+// 			KeysToInactivate = append(KeysToInactivate, hash)
+// 		} else {
+// 			// fmt.Println("X: there is no leaf node at key", hash.Hex())
+// 		}
+// 	}
+
+// 	fmt.Println("\n************************************************************************************")
+// 	fmt.Println("Accounts length: ", len(AccountsToInactivate))
+// 	fmt.Println("Keys length: ", len(KeysToInactivate))
+// 	fmt.Println("AccountsToInactivate: ", AccountsToInactivate)
+// 	fmt.Println("KeysToInactivate: ", KeysToInactivate)
+
+// 	// move inactive leaf nodes to left
+// 	for index, key := range KeysToInactivate {
+
+// 		// to delete storage trie from disk
+// 		addr := common.BytesToAddress(AccountsToInactivate[index])
+// 		common.AccountsToDeleteFromDisk = append(common.AccountsToDeleteFromDisk, addr)
+
+// 		// comment out when DFS --> for 문 맨 뒤로 자리 옮김. DFS 땐 그 코드를 comment-out 할 것.
+// 		// delete inactive leaf node --> changed to deleting during DFS (joonha)
+// 		// fmt.Println("delete previous leaf node -> key:", key.Hex())
+// 		// fmt.Println("delete previous leaf node -> key:", key[:])
+// 		// if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
+// 		// 	s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
+// 		// }
+
+// 		// insert inactive leaf node to left
+// 		keyToInsert := common.Int64ToHash(inactiveBoundaryKey + int64(index))
+// 		fmt.Println("(Inactivate)insert -> key:", keyToInsert.Hex())
+// 		if err := s.trie.TryUpdate_SetKey(keyToInsert[:], AccountsToInactivate[index]); err != nil {
+// 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", keyToInsert[:], err))
+// 		} else {
+// 			// (joonha)
+// 			// fmt.Println("joonha 1")
+			
+// 			// apply inactivation result to AddrToKey 
+// 			// Q. Should this be applied to AddrToKey_Dirty?
+// 			common.AddrToKey[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
+// 			s.AddrToKeyDirty[common.BytesToAddress(AccountsToInactivate[index])] = keyToInsert
+			
+// 			// fmt.Println("joonha 4")
+
+// 			// save the inactive account key info for later restoration 
+// 			_, doExist := s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])]
+// 			if !doExist {
+// 				s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])] = common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])]
+// 			}
+// 			s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])] = append(s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])], keyToInsert)
+
+// 			// fmt.Println("addrToKey_inactive is ", common.AddrToKey_inactive[common.BytesToAddress(AccountsToInactivate[index])])
+// 			fmt.Println("s.AddrToKeyDirty_inactive is ", s.AddrToKeyDirty_inactive[common.BytesToAddress(AccountsToInactivate[index])])
+// 			fmt.Println("acc: ", common.BytesToAddress(AccountsToInactivate[index]))
+// 		}
+
+// 		/*****************************/
+// 		// SNAPSHOT
+// 		/*****************************/
+// 		// this part does two things.
+// 		// 1. move active storage snapshot to inactive storage snapshot		
+// 		// 2. delete active snapshot
+		
+// 		// ACCOUNT: 
+// 		// we don't need inactive account snapshot, but in case of storage depending on account, move accounts to inactive snapshot Tree
+// 		// if commenting this part out doesn't occur err, comment out for memory optimization.
+// 		// s.snapAccounts_inactive = make(map[common.Hash][]byte)
+// 		acc, _ := s.snap.AccountRLP(key)
+// 		// fmt.Println("### acc: ", acc)
+// 		s.snapAccounts_inactive[keyToInsert] = acc
+// 		// fmt.Println("s.snapAccounts_inactive[keyToInsert]: ", s.snapAccounts_inactive[keyToInsert])
+// 		// fmt.Println(">>> key is ", keyToInsert)
+
+
+// 		// STORAGE:
+// 		snapRoot := s.snap.Root()
+// 		// fmt.Println("snapRoot: ", snapRoot)
+		
+// 		// accountList := s.snaps.AccountList_ethane(snapRoot) // handing in snapRoot
+// 		// fmt.Println("accountList: ", accountList) // key
+
+// 		slotKeyList := s.snaps.StorageList_ethane(snapRoot, key) // active snapshot's storage list (key is the accountHash to be deleted)
+// 		fmt.Println("slotKeyList: ", slotKeyList)
+// 		// fmt.Println("key: ", key)
+// 		// obj := s.getStateObject(common.BytesToAddress(AccountsToInactivate[index]))
+// 		// obj := s.stateObjects[common.BytesToAddress(AccountsToInactivate[index])]
+// 		temp := make(map[common.Hash][]byte)
+// 		for _, slotKey := range slotKeyList {
+
+// 			// // TODO: delete slot of storage trie --> does state trie deletion do this all at once? (joonha)
+// 			// if obj == nil {
+// 			// 	fmt.Println("(1) No object detected to delete slots from")
+// 			// } else { // obj != nil
+// 			// 	fmt.Println("(1) Object detected to deleted slots from")
+// 			// 	obj.DeleteSlot(slotKey)
+// 			// }
+
+// 			fmt.Println("slotKey is ", slotKey)
+// 			v, _ := s.snap.Storage(key, slotKey) 
+// 			fmt.Println("v is", v)
+// 			temp[slotKey] = v
+// 		}
+// 		s.snapStorage_inactive[keyToInsert] = temp
+		
+// 		// // apply storage trie change
+// 		// if obj == nil {
+// 		// 	fmt.Println("(2) No object detected to delete slots from")
+// 		// } else { // obj != nil
+// 		// 	fmt.Println("(2) Object detected to deleted slots from")
+// 		// 	obj.CommitTrie(s.db) //////// should be altered to _hashedKey...?
+// 		// }
+
+// 		// DELETE:
+// 		s.snapDestructs[key] = struct{}{}
+// 		delete(s.snapAccounts, key)
+// 		delete(s.snapStorage, key)
+
+// 		// DELETE ACCOUNT FROM TRIE
+// 		if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
+// 			s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
+// 		}
+// 	}
+
+// 	// TODO(joonha) should delete intermediate nodes from the disk ()
+
+// 	// print result
+// 	fmt.Println("inactivate", len(KeysToInactivate), "accounts")
+// 	fmt.Println("trie root after inactivate leaf nodes:", s.trie.Hash().Hex())
+
+// 	// return # of inactivated accounts
+// 	return int64(len(KeysToInactivate))
+// }
 
 // GetAccount returns Account from stateObject (joonha)
 func (s *StateDB) GetAccount(addr common.Address) *Account {
