@@ -287,6 +287,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
+
+	// set snapshot options (joonha) --> this should be done before calling state.New_inactiveSnapshot
+	common.UsingActiveSnapshot = true
+	common.UsingInactiveStorageSnapshot = true
+
 	// if _, err := state.New(head.Root(), bc.stateCache, bc.snaps); err != nil { // --> original code
 	if _, err := state.New_inactiveSnapshot(head.Root(), bc.stateCache, bc.snaps, bc.snaps_inactive); err != nil { // (joonha)
 		// Head state is missing, before the state recovery, find out the
@@ -382,7 +387,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}
 		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
 		bc.snaps_inactive, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover) // (joonha)
-		// 이로 인해 같은 것을 계속 참조하는 게 아닌지. (joonha)
 	}
 
 	// Start future block processor.
@@ -1528,9 +1532,6 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	} else {
 		common.DoDeleteLeafNode = false
 	}
-
-	// TODO(joonha) inactive storage snapshot의 동작은 현재 full.sh의 snapshot 옵션을 켠 상태에서만 유효함. 
-	// TODO(joonha) active account + stroage snapshot 의 경우에도 이와 같이 옵션화 해줘야 함.
 
 	// print some of snapshot info for debugging (jmlee)
 	// if bc.snaps != nil {

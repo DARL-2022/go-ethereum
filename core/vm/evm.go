@@ -510,12 +510,15 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		/***************************************/
 		// 0. if the account is Contract account
 		// 1. rebuild the storage trie
-		// 1-1. verify if the rebuilt trie root is equal to the account's storage root
+		// 1-1. verify if the rebuilt trie root is equal to the account's storage root --> TODO
 		// 2. update active snapshot
 		// 3. remove inactive snapshot
 
-		// TODO: check the snapshot option
-		evm.StateDB.RebuildStorageTrieFromSnapshot(blockRoot, inactiveAddr, inactiveKey)
+		if common.UsingInactiveStorageSnapshot { // when inactive storage snapshot option is on, rebuild storage trie from snapshot
+			evm.StateDB.RebuildStorageTrieFromSnapshot(blockRoot, inactiveAddr, inactiveKey)
+		} else {
+			log.Info("Snapshot option is OFF... Please rebuild the storage trie in another way.")
+		}
 
 		/***************************************/
 		// REMOVE FROM INACTIVE TRIE

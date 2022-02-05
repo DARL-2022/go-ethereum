@@ -266,36 +266,24 @@ func New_inactiveSnapshot(root common.Hash, db Database, snaps *snapshot.Tree, s
 		AddrToKeyDirty_inactive:make(map[common.Address][]common.Hash), // (joonha)
 	}
 	if sdb.snaps != nil {
-		// fmt.Println("^O^O^O^O^O^O^O^O^O^O^^O^OO^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^")
-		// fmt.Println("^O^O^O^O^O^O^O^O^O^O^^O^OO^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^")
-		// fmt.Println("^O^O^O^O^O^O^O^O^O^O^^O^OO^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^O^")
-		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
-			sdb.snapDestructs = make(map[common.Hash]struct{})
-			sdb.snapAccounts = make(map[common.Hash][]byte)
-			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+		if common.UsingActiveSnapshot {
+			if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
+				sdb.snapDestructs = make(map[common.Hash]struct{})
+				sdb.snapAccounts = make(map[common.Hash][]byte)
+				sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
+			}
 		}
 	}
 	// inactive storage snapshot (joonha)
 	if sdb.snaps_inactive != nil {
-	// if common.UsingInactiveStorageSnapshot == 1 {
+		if common.UsingInactiveStorageSnapshot {
 
-		// if sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root); sdb.snap_inactive != nil {
-		// 	sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
-		// 	sdb.snapAccounts_inactive = make(map[common.Hash][]byte)
-		// 	sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
-		// }
+			sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root) // watch out: insufficient funds err may occur
 
-		// fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
-		// fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
-		// fmt.Println("^~^^~^~^~^~^~^^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^~^")
-		// fmt.Println("New_inactiveSnapshot")
-		// fmt.Println("sdb.snaps_inactive: ", sdb.snaps_inactive)
-		// fmt.Println("sdb.snaps_inactive.Snapshot(root): ", sdb.snaps_inactive.Snapshot(root))
-		sdb.snap_inactive = sdb.snaps_inactive.Snapshot(root) // watch out: insufficient funds err may occur
-
-		sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
-		sdb.snapAccounts_inactive = make(map[common.Hash][]byte)
-		sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
+			sdb.snapDestructs_inactive = make(map[common.Hash]struct{})
+			sdb.snapAccounts_inactive = make(map[common.Hash][]byte)
+			sdb.snapStorage_inactive = make(map[common.Hash]map[common.Hash][]byte)
+		}
 	}
 	return sdb, nil
 }
@@ -310,7 +298,12 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 		s.prefetcher = nil
 	}
 	if s.snap != nil {
-		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
+		// s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace) // --> original code
+		
+		// (joonha)
+		if common.UsingActiveSnapshot {
+			s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
+		}
 	}
 }
 
@@ -825,35 +818,37 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// enough to track account updates at commit time, deletions need tracking
 	// at transaction boundary level to ensure we capture state clearing.
 	if s.snap != nil {
-		// fmt.Println("addr:", obj.Address().Hex(), "update snapAccounts -> addrKey:", obj.addrHash.Hex())
-		fmt.Println("(USO) Addr: ", obj.data.Addr)
-		fmt.Println("(USO) Nonce: ", obj.data.Nonce)
-		fmt.Println("(USO) Balance: ", obj.data.Balance)
-		fmt.Println("(USO) Root: ", obj.data.Root)
-		fmt.Println("(USO) CodeHash: ", obj.data.CodeHash)
+		if common.UsingActiveSnapshot {
+			// fmt.Println("addr:", obj.Address().Hex(), "update snapAccounts -> addrKey:", obj.addrHash.Hex())
+			fmt.Println("(USO) Addr: ", obj.data.Addr)
+			fmt.Println("(USO) Nonce: ", obj.data.Nonce)
+			fmt.Println("(USO) Balance: ", obj.data.Balance)
+			fmt.Println("(USO) Root: ", obj.data.Root)
+			fmt.Println("(USO) CodeHash: ", obj.data.CodeHash)
 
-		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash, addr)
-		// fmt.Println("\n>>> snapshot.SlimAccountRLP( ): ", s.snapAccounts[obj.addrHash], "\n")
+			s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash, addr)
+			// fmt.Println("\n>>> snapshot.SlimAccountRLP( ): ", s.snapAccounts[obj.addrHash], "\n")
 
-		// 새 키로 스냅샷을 만든 거니까, 이전 키의 스냅샷은 삭제해줘야 함. 단, key 업데이트 없는 경우는 제외. (joonha)
-		// 이는 기존 geth와 달리 compactMPT에서는 스냅샷의 value 뿐 아니라 key 도 바뀌기 때문임.
-		if obj.addrHash != prevAddrHash { // key has been changed
-			// storage snapshot의 account addr도 모두 변경해줘야 함.
-			temp := make(map[common.Hash][]byte)
-			for kk, vv := range s.snapStorage[prevAddrHash] {
-				temp[kk] = vv
+			// 새 키로 스냅샷을 만든 거니까, 이전 키의 스냅샷은 삭제해줘야 함. 단, key 업데이트 없는 경우는 제외. (joonha)
+			// 이는 기존 geth와 달리 compactMPT에서는 스냅샷의 value 뿐 아니라 key 도 바뀌기 때문임.
+			if obj.addrHash != prevAddrHash { // key has been changed
+				// storage snapshot의 account addr도 모두 변경해줘야 함.
+				temp := make(map[common.Hash][]byte)
+				for kk, vv := range s.snapStorage[prevAddrHash] {
+					temp[kk] = vv
+				}
+				s.snapStorage[obj.addrHash] = temp
+
+				s.snapDestructs[prevAddrHash] = struct{}{} // add this to snapshot's delete list
+				delete(s.snapAccounts, prevAddrHash) // delete this from snapshot's update list
+				delete(s.snapStorage, prevAddrHash) // delete this from snapshot's update list
 			}
-			s.snapStorage[obj.addrHash] = temp
 
-			s.snapDestructs[prevAddrHash] = struct{}{} // add this to snapshot's delete list
-			delete(s.snapAccounts, prevAddrHash) // delete this from snapshot's update list
-			delete(s.snapStorage, prevAddrHash) // delete this from snapshot's update list
-		}
+			// for slotKey, slotValue := range s.snapStorage[obj.addrHash] {
+			// 	fmt.Println("(USO)s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
+			// } 
 
-		// for slotKey, slotValue := range s.snapStorage[obj.addrHash] {
-		// 	fmt.Println("(USO)s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
-		// } 
-
+		}	
 	}
 
 	// // for debugging (joonha)
@@ -936,6 +931,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 	// SNAPSHOT
 	/****************************************************/
 	if s.snap != nil {
+		fmt.Println("<<<<<<<<<<<<<<<<< getDeletedStateObject >>>>>>>>>>>>>>>>>>>> snapshot ON")
 
 		/***********************************/
 		// PRINT TO DEBUG
@@ -1064,6 +1060,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 	/****************************************************/
 	// If snapshot unavailable or reading from it failed, load from the database
 	if s.snap == nil || err != nil {
+		fmt.Println("<<<<<<<<<<<<<<<<< getDeletedStateObject >>>>>>>>>>>>>>>>>>>> snapshot OFF")
 		fmt.Println("Try to find account without snapshot -> addr:", addr.Hex())
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
@@ -1181,9 +1178,17 @@ func (s *StateDB) createObject(addr common.Address, blockNum *big.Int) (newobj, 
 
 	var prevdestruct bool
 	if s.snap != nil && prev != nil {
-		_, prevdestruct = s.snapDestructs[prev.addrHash]
-		if !prevdestruct {
-			s.snapDestructs[prev.addrHash] = struct{}{}
+		// _, prevdestruct = s.snapDestructs[prev.addrHash]
+		// if !prevdestruct {
+		// 	s.snapDestructs[prev.addrHash] = struct{}{}
+		// }
+
+		// (joonha)
+		if common.UsingActiveSnapshot {
+			_, prevdestruct = s.snapDestructs[prev.addrHash]
+			if !prevdestruct {
+				s.snapDestructs[prev.addrHash] = struct{}{}
+			}
 		}
 	}
 	newobj = newObject(s, addr, Account{})
@@ -1238,11 +1243,12 @@ func (s *StateDB) createObject_restoring(addr common.Address) (newobj, prev *sta
 	// 		s.snapDestructs[prev.addrHash] = struct{}{}
 	// 	}
 	// }
-	if s.snap_inactive != nil && prev != nil {
-	// if common.UsingInactiveStorageSnapshot == 1 && prev != nil {
-		_, prevdestruct = s.snapDestructs_inactive[prev.addrHash]
-		if !prevdestruct {
-			s.snapDestructs_inactive[prev.addrHash] = struct{}{}
+	if s.snap_inactive != nil && prev != nil { // TODO: 애초에 생성하지 않으니 destruct 할 필요도 없는 것 아닌지 확인하기.
+		if common.UsingInactiveStorageSnapshot {
+			_, prevdestruct = s.snapDestructs_inactive[prev.addrHash]
+			if !prevdestruct {
+				s.snapDestructs_inactive[prev.addrHash] = struct{}{}
+			}
 		}
 	}
 	newobj = newObject(s, addr, types.StateAccount{})
@@ -1537,9 +1543,11 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			// transactions within the same block might self destruct and then
 			// ressurrect an account; but the snapshotter needs both events.
 			if s.snap != nil {
-				s.snapDestructs[obj.addrHash] = struct{}{} // We need to maintain account deletions explicitly (will remain set indefinitely)
-				delete(s.snapAccounts, obj.addrHash)       // Clear out any previously updated account data (may be recreated via a ressurrect)
-				delete(s.snapStorage, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
+				if common.UsingActiveSnapshot { // (joonha)
+					s.snapDestructs[obj.addrHash] = struct{}{} // We need to maintain account deletions explicitly (will remain set indefinitely)
+					delete(s.snapAccounts, obj.addrHash)       // Clear out any previously updated account data (may be recreated via a ressurrect)
+					delete(s.snapStorage, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
+				}
 			}
 			// // (joonha)
 			// if s.snap_inactive != nil {
@@ -1866,35 +1874,37 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	}
 	// If snapshotting is enabled, update the snapshot tree with this new version
 	if s.snap != nil {
-		if metrics.EnabledExpensive {
-			defer func(start time.Time) { s.SnapshotCommits += time.Since(start) }(time.Now())
+		if common.UsingActiveSnapshot {
+			if metrics.EnabledExpensive {
+				defer func(start time.Time) { s.SnapshotCommits += time.Since(start) }(time.Now())
+			}
+			// Only update if there's a state transition (skip empty Clique blocks)
+			if parent := s.snap.Root(); parent != root {
+				// fmt.Println("\n\nUpdate original snapshot is done here")
+				// fmt.Println("parent_orig: ", parent)
+				// fmt.Println("root_orig: ", root, "\n\n")
+				// code for debugging (jmlee)
+				for k, v := range s.snapAccounts {
+					fmt.Println("\ns.snapAccounts -> k:", k, "/ v:", v)
+					// (joonha)
+					for slotKey, slotValue := range s.snapStorage[k] {
+						fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
+					} 
+				}
+	
+				if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil { // flag(joonha) core/state/snapshot/snapshot.go의 Update 함수가 여기서 불림.
+					log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
+				}
+				// Keep 128 diff layers in the memory, persistent layer is 129th.
+				// - head layer is paired with HEAD state
+				// - head-1 layer is paired with HEAD-1 state
+				// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
+				if err := s.snaps.Cap(root, 128); err != nil {
+					log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
+				}
+			}
+			s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 		}
-		// Only update if there's a state transition (skip empty Clique blocks)
-		if parent := s.snap.Root(); parent != root {
-			// fmt.Println("\n\nUpdate original snapshot is done here")
-			// fmt.Println("parent_orig: ", parent)
-			// fmt.Println("root_orig: ", root, "\n\n")
-			// code for debugging (jmlee)
-			for k, v := range s.snapAccounts {
-				fmt.Println("\ns.snapAccounts -> k:", k, "/ v:", v)
-				// (joonha)
-				for slotKey, slotValue := range s.snapStorage[k] {
-					fmt.Println("s.snapStorage -> slotKey:", slotKey, "/ slotValue: ", slotValue)
-				} 
-			}
-
-			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil { // flag(joonha) core/state/snapshot/snapshot.go의 Update 함수가 여기서 불림.
-				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
-			}
-			// Keep 128 diff layers in the memory, persistent layer is 129th.
-			// - head layer is paired with HEAD state
-			// - head-1 layer is paired with HEAD-1 state
-			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-			if err := s.snaps.Cap(root, 128); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
-			}
-		}
-		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
 
 	// fmt.Println("\ncommon.UsingInactiveStorageSnapshot: ", common.UsingInactiveStorageSnapshot) // false
@@ -1902,39 +1912,39 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 
 	// update inactive storage snapshot (joonha)
 	if s.snap_inactive != nil {
-	// if common.UsingInactiveStorageSnapshot == 1 {
-	// if true {
-		// s.snap_inactive = s.snaps_inactive.Snapshot(root) 
-		if s.snap_inactive != nil { 
+		if common.UsingInactiveStorageSnapshot {
+			// s.snap_inactive = s.snaps_inactive.Snapshot(root) 
+			if s.snap_inactive != nil { 
 
-			// code for debugging
-			for k, v := range s.snapAccounts_inactive {
-				fmt.Println("s.snapAccounts_inactive -> k:", k, "/ v:", v)
-			}
-			for k, v := range s.snapStorage_inactive {
-				for kk, vv := range v {
-					fmt.Println("s.snapStorage_inactive[", k, "] -> kk:", kk, "/ vv:", vv)
-				} 
-			}
-
-			// Only update if there's a state transition (skip empty Clique blocks)
-			// fmt.Println("\n\nparent_inactive: ", s.snap_inactive.Root())
-			// fmt.Println("root: ", root, "\n\n")
-
-			if parent_inactive := s.snap_inactive.Root(); parent_inactive != root {
-				// TODO(joonha): snapAccount_inactive는 없을테니 추후 저장 효율을 위해 nil을 넘겨줄 것.
-				if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive); err != nil {
-					log.Warn("Failed to update snapshot tree", "from", parent_inactive, "to", root, "err", err)
+				// code for debugging
+				for k, v := range s.snapAccounts_inactive {
+					fmt.Println("s.snapAccounts_inactive -> k:", k, "/ v:", v)
 				}
-				if err := s.snaps_inactive.Cap(root, 128); err != nil {
-					log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
+				for k, v := range s.snapStorage_inactive {
+					for kk, vv := range v {
+						fmt.Println("s.snapStorage_inactive[", k, "] -> kk:", kk, "/ vv:", vv)
+					} 
 				}
+
+				// Only update if there's a state transition (skip empty Clique blocks)
+				// fmt.Println("\n\nparent_inactive: ", s.snap_inactive.Root())
+				// fmt.Println("root: ", root, "\n\n")
+
+				if parent_inactive := s.snap_inactive.Root(); parent_inactive != root {
+					// TODO(joonha): snapAccount_inactive는 없을테니 추후 저장 효율을 위해 nil을 넘겨줄 것.
+					if err := s.snaps_inactive.Update(root, parent_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive); err != nil {
+						log.Warn("Failed to update snapshot tree", "from", parent_inactive, "to", root, "err", err)
+					}
+					if err := s.snaps_inactive.Cap(root, 128); err != nil {
+						log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
+					}
+				}
+			} else {
+				fmt.Println("s.snap_inactive is nil")
 			}
-		} else {
-			fmt.Println("s.snap_inactive is nil")
+			
+			s.snap_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive = nil, nil, nil, nil
 		}
-		
-		s.snap_inactive, s.snapDestructs_inactive, s.snapAccounts_inactive, s.snapStorage_inactive = nil, nil, nil, nil
 	}
 
 	return root, err
@@ -2088,59 +2098,63 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 		// 1. move active storage snapshot to inactive storage snapshot		
 		// 2. delete active snapshot
 		
-		// ACCOUNT: 
-		// we don't need inactive account snapshot, but in case of storage depending on account, move accounts to inactive snapshot Tree
-		// if commenting this part out doesn't occur err, comment out for memory optimization.
-		// s.snapAccounts_inactive = make(map[common.Hash][]byte)
-		acc, _ := s.snap.AccountRLP(key)
-		// fmt.Println("### acc: ", acc)
-		s.snapAccounts_inactive[keyToInsert] = acc
-		// fmt.Println("s.snapAccounts_inactive[keyToInsert]: ", s.snapAccounts_inactive[keyToInsert])
-		// fmt.Println(">>> key is ", keyToInsert)
-
+		// // ACCOUNT: 
+		// // we don't need inactive account snapshot, but in case of storage depending on account, move accounts to inactive snapshot Tree
+		// // if commenting this part out doesn't occur err, comment out for memory optimization.
+		// // s.snapAccounts_inactive = make(map[common.Hash][]byte)
+		// acc, _ := s.snap.AccountRLP(key)
+		// // fmt.Println("### acc: ", acc)
+		// s.snapAccounts_inactive[keyToInsert] = acc
+		// // fmt.Println("s.snapAccounts_inactive[keyToInsert]: ", s.snapAccounts_inactive[keyToInsert])
+		// // fmt.Println(">>> key is ", keyToInsert)
 
 		// STORAGE:
-		snapRoot := s.snap.Root()
-		// fmt.Println("snapRoot: ", snapRoot)
-		
-		// accountList := s.snaps.AccountList_ethane(snapRoot) // handing in snapRoot
-		// fmt.Println("accountList: ", accountList) // key
+		if common.UsingInactiveStorageSnapshot {
+			snapRoot := s.snap.Root()
+			// fmt.Println("snapRoot: ", snapRoot)
+			
+			// accountList := s.snaps.AccountList_ethane(snapRoot) // handing in snapRoot
+			// fmt.Println("accountList: ", accountList) // key
 
-		slotKeyList := s.snaps.StorageList_ethane(snapRoot, key) // active snapshot's storage list (key is the accountHash to be deleted)
-		fmt.Println("slotKeyList: ", slotKeyList)
-		// fmt.Println("key: ", key)
-		// obj := s.getStateObject(common.BytesToAddress(AccountsToInactivate[index]))
-		// obj := s.stateObjects[common.BytesToAddress(AccountsToInactivate[index])]
-		temp := make(map[common.Hash][]byte)
-		for _, slotKey := range slotKeyList {
+			// TODO: 여기서 옵션1에 옵션2가 의존하고 있다. 
+			// Inactivate 할 슬롯 목록을 기존 스냅샷으로부터 가져오고 있는 것이다. 
+			// 이를 바꾸어 obj의 스토리지 슬롯 리스트를 만들 수 있으면 좋겠다...
+			slotKeyList := s.snaps.StorageList_ethane(snapRoot, key) // active snapshot's storage list (key is the accountHash to be deleted)
+			fmt.Println("slotKeyList: ", slotKeyList)
+			// fmt.Println("key: ", key)
+			// obj := s.getStateObject(common.BytesToAddress(AccountsToInactivate[index]))
+			// obj := s.stateObjects[common.BytesToAddress(AccountsToInactivate[index])]
+			temp := make(map[common.Hash][]byte)
+			for _, slotKey := range slotKeyList {
 
-			// // TODO: delete slot of storage trie --> does state trie deletion do this all at once? (joonha)
+				// // TODO: delete slot of storage trie --> does state trie deletion do this all at once? (joonha)
+				// if obj == nil {
+				// 	fmt.Println("(1) No object detected to delete slots from")
+				// } else { // obj != nil
+				// 	fmt.Println("(1) Object detected to deleted slots from")
+				// 	obj.DeleteSlot(slotKey)
+				// }
+
+				fmt.Println("slotKey is ", slotKey)
+				v, _ := s.snap.Storage(key, slotKey) 
+				fmt.Println("v is", v)
+				temp[slotKey] = v
+			}
+			s.snapStorage_inactive[keyToInsert] = temp
+			
+			// // apply storage trie change
 			// if obj == nil {
-			// 	fmt.Println("(1) No object detected to delete slots from")
+			// 	fmt.Println("(2) No object detected to delete slots from")
 			// } else { // obj != nil
-			// 	fmt.Println("(1) Object detected to deleted slots from")
-			// 	obj.DeleteSlot(slotKey)
+			// 	fmt.Println("(2) Object detected to deleted slots from")
+			// 	obj.CommitTrie(s.db) //////// should be altered to _hashedKey...?
 			// }
 
-			fmt.Println("slotKey is ", slotKey)
-			v, _ := s.snap.Storage(key, slotKey) 
-			fmt.Println("v is", v)
-			temp[slotKey] = v
+			// DELETE:
+			s.snapDestructs[key] = struct{}{}
+			delete(s.snapAccounts, key)
+			delete(s.snapStorage, key)
 		}
-		s.snapStorage_inactive[keyToInsert] = temp
-		
-		// // apply storage trie change
-		// if obj == nil {
-		// 	fmt.Println("(2) No object detected to delete slots from")
-		// } else { // obj != nil
-		// 	fmt.Println("(2) Object detected to deleted slots from")
-		// 	obj.CommitTrie(s.db) //////// should be altered to _hashedKey...?
-		// }
-
-		// DELETE:
-		s.snapDestructs[key] = struct{}{}
-		delete(s.snapAccounts, key)
-		delete(s.snapStorage, key)
 	}
 
 	// TODO(joonha) should delete intermediate nodes from the disk ()
@@ -2354,7 +2368,7 @@ func (s *StateDB) RemoveRestoredKeyFromAddrToKeyDirty_inactive(inactiveAddr comm
 // rebuild a storage trie when restoring using snapshot (joonha)
 func (s *StateDB) RebuildStorageTrieFromSnapshot(snapRoot common.Hash, addr common.Address, accountHash common.Hash) {
 
-	// should i call this function not from evm.go but from updateStateObject()?
+	// TODO: verify if the rebuilt trie root is equal to the account's storage root 
 
 	fmt.Println("\n/***********************************/")
 	fmt.Println("// REBUILDSTORAGETRIEFROMSNAPSHOT")
@@ -2416,8 +2430,8 @@ func (s *StateDB) RebuildStorageTrieFromSnapshot(snapRoot common.Hash, addr comm
 	}
 
 	// TODO
-	// 1. delete inactive snapshots (no need to delete'em from trie because they don't exist there!)
-	// 2. add to active snapshot (check if i should do this) -> 내가 해줘야 하는 것 맞음. 윗윗줄에서.
+	// 1. delete inactive snapshots (no need to delete'em from trie because they don't exist there!) -> DONE
+	// 2. add to active snapshot (check if i should do this) -> DONE
 
 
 	// /******************************************/
