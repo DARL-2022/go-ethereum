@@ -215,6 +215,8 @@ var (
 		Name:  "snapshot",
 		Usage: `Enables snapshot-database mode (default = enable)`,
 	}
+	// 이것처럼 모드 놓고 common의 타입을 바꿔주는 식으로 flag 구현하면 될 것 같음. (joonha)
+	// cli.BoolTFlag 불리언 방식의 입력을 받는다는 것으로 이해. // BoolTFlag? Not BoolFlag?
 	TxLookupLimitFlag = cli.Uint64Flag{
 		Name:  "txlookuplimit",
 		Usage: "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
@@ -1866,6 +1868,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if !ctx.GlobalBool(SnapshotFlag.Name) {
 		cache.SnapshotLimit = 0 // Disabled
 	}
+	// 이런 식으로 불리언 체크를 해서 common.무언가 를 셋해주면 될 것 같다. (joonha)
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
 		cache.TrieCleanLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100
 	}
