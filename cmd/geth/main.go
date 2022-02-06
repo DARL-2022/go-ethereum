@@ -54,6 +54,8 @@ var (
 	app = flags.NewApp(gitCommit, gitDate, "the go-ethereum command line interface")
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
+		utils.ActiveSnapshotFlag, // (joonha)
+		utils.InactiveStorageSnapshotFlag, // (joonha)
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,

@@ -286,9 +286,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
 
-	// set snapshot options (joonha) --> this should be done before calling state.New_inactiveSnapshot
-	common.UsingActiveSnapshot = true
-	common.UsingInactiveStorageSnapshot = true
+	// // set snapshot options (joonha) --> these are done by flags (set at full.sh)
+	// common.UsingActiveSnapshot = true
+	// common.UsingInactiveStorageSnapshot = true
 
 	// if _, err := state.New(head.Root(), bc.stateCache, bc.snaps); err != nil { // --> original code
 	if _, err := state.New_inactiveSnapshot(head.Root(), bc.stateCache, bc.snaps, bc.snaps_inactive); err != nil { // (joonha)
