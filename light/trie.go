@@ -129,6 +129,11 @@ func (t *odrTrie) TryGetAll_SetKey(firstKey, lastKey []byte) ([][]byte, []common
 }
 
 // temp function for correct build, this will not be called in Ethane (joonha)
+func (t *odrTrie) TryGetAllSlots() (map[common.Hash][]byte, error) {
+	return nil, nil
+}
+
+// temp function for correct build, this will not be called in Ethane (joonha)
 func (t *odrTrie) Print() {}
 
 // temp function for correct build, this will not be called in Ethane (joonha)

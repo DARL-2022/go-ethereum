@@ -110,13 +110,13 @@ func printHelp(out io.Writer, templ string, data interface{}) {
 
 var (
 	// to turn on/off snapshot at full.sh (joonha)
-	ActiveSnapshotFlag = cli.BoolTFlag{ // BoolTFlag vs. BoolFlag ?
+	ActiveSnapshotFlag = cli.BoolTFlag{ // BoolTFlag may mean 'default = true'
 		Name:  "activeSnapshot",
-		Usage: `Enables snapshot-database mode in active trie (default = enable)`,
+		Usage: `[Ethane] Enables snapshot-database mode in active trie (default = enable)`,
 	}
 	InactiveStorageSnapshotFlag = cli.BoolTFlag{
 		Name:  "inactiveStorageSnapshot",
-		Usage: `Enables snapshot-database mode in inactive storage trie (default = enable)`,
+		Usage: `[Ethane] Enables snapshot-database mode in inactive storage trie (default = enable)`,
 	}
 	// General settings
 	DataDirFlag = DirectoryFlag{

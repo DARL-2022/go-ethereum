@@ -97,6 +97,11 @@ func (t *SecureTrie) TryGetAll_SetKey(firstKey, lastKey []byte) ([][]byte, []com
 	return t.trie.TryGetAll(firstKey, lastKey)
 }
 
+// (joonha)
+func (t *SecureTrie) TryGetAllSlots() (map[common.Hash][]byte, error) {
+	return t.trie.TryGetAllSlots()
+}
+
 // TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
 // possible to use keybyte-encoding as the path might contain odd nibbles.
 func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {
