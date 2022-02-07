@@ -112,6 +112,7 @@ type Trie interface {
 
 	// (joonha)
 	TryGetAll_SetKey([]byte, []byte) ([][]byte, []common.Hash, error)
+	TryGetAllSlots() (map[common.Hash][]byte, error)
 	Print()
 	Print_storageTrie()
 	GetDB() *trie.Database 

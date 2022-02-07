@@ -400,4 +400,4 @@ func (n valueNode) delete_storageTrie(ind string, db *Database) string {
 	return fmt.Sprintf("n: ", []byte(n))
 }
 
-// TODO delete all nodes not only shortnode
+// TODO(joonha) delete all nodes not only shortnode

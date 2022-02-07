@@ -2079,37 +2079,61 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 
 		// STORAGE:
 		if common.UsingInactiveStorageSnapshot {
-			snapRoot := s.snap.Root()
-			// fmt.Println("snapRoot: ", snapRoot)
-			
+	
 			// accountList := s.snaps.AccountList_ethane(snapRoot) // handing in snapRoot
 			// fmt.Println("accountList: ", accountList) // key
+			
+			if common.UsingActiveSnapshot {
 
-			// TODO: 여기서 옵션1에 옵션2가 의존하고 있다. 
-			// Inactivate 할 슬롯 목록을 기존 스냅샷으로부터 가져오고 있는 것이다. 
-			// 이를 바꾸어 obj의 스토리지 슬롯 리스트를 만들 수 있으면 좋겠다...
-			slotKeyList := s.snaps.StorageList_ethane(snapRoot, key) // active snapshot's storage list (key is the accountHash to be deleted)
-			fmt.Println("slotKeyList: ", slotKeyList)
-			// fmt.Println("key: ", key)
-			// obj := s.getStateObject(common.BytesToAddress(AccountsToInactivate[index]))
-			// obj := s.stateObjects[common.BytesToAddress(AccountsToInactivate[index])]
-			temp := make(map[common.Hash][]byte)
-			for _, slotKey := range slotKeyList {
+				snapRoot := s.snap.Root()
 
-				// // TODO: delete slot of storage trie --> does state trie deletion do this all at once? (joonha)
-				// if obj == nil {
-				// 	fmt.Println("(1) No object detected to delete slots from")
-				// } else { // obj != nil
-				// 	fmt.Println("(1) Object detected to deleted slots from")
-				// 	obj.DeleteSlot(slotKey)
-				// }
+				// get slotKeyList from active snapshot
+				slotKeyList := s.snaps.StorageList_ethane(snapRoot, key) // active snapshot's storage list (key is the accountHash to be deleted)
+				fmt.Println("slotKeyList: ", slotKeyList)
+				temp := make(map[common.Hash][]byte)
+				// TODO: slotKeyList nil check
+				for _, slotKey := range slotKeyList {
 
-				fmt.Println("slotKey is ", slotKey)
-				v, _ := s.snap.Storage(key, slotKey) 
-				fmt.Println("v is", v)
-				temp[slotKey] = v
+					// // TODO: delete slot of storage trie --> does state trie deletion do this all at once? (joonha)
+					// if obj == nil {
+					// 	fmt.Println("(1) No object detected to delete slots from")
+					// } else { // obj != nil
+					// 	fmt.Println("(1) Object detected to deleted slots from")
+					// 	obj.DeleteSlot(slotKey)
+					// }
+
+					fmt.Println("slotKey is ", slotKey)
+					v, _ := s.snap.Storage(key, slotKey) 
+					fmt.Println("v is", v)
+					temp[slotKey] = v
+				}
+				s.snapStorage_inactive[keyToInsert] = temp	
+
+				// DELETE:
+				s.snapDestructs[key] = struct{}{}
+				delete(s.snapAccounts, key)
+				delete(s.snapStorage, key)
+
+			} else if common.UsingActiveSnapshot == false { // get slotKeyList from object's storage trie			
+				obj := s.getStateObject(addr)
+				fmt.Println("obj: ", obj)
+
+				slots := make(map[common.Hash][]byte)
+
+				if obj != nil {
+					storageTrie := obj.getTrie(s.db)
+					fmt.Println("storageTrie: ", storageTrie)
+					obj.Print_storageTrie() // this printing should be after getTrie()
+
+					slots, _ = storageTrie.TryGetAllSlots()
+					s.snapStorage_inactive[keyToInsert] = slots
+					fmt.Println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")	
+					fmt.Println("slots: ", slots)
+
+				} else {
+					fmt.Println("obj has been deleted.")
+				}
 			}
-			s.snapStorage_inactive[keyToInsert] = temp
 			
 			// // apply storage trie change
 			// if obj == nil {
@@ -2119,10 +2143,10 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 			// 	obj.CommitTrie(s.db) //////// should be altered to _hashedKey...?
 			// }
 
-			// DELETE:
-			s.snapDestructs[key] = struct{}{}
-			delete(s.snapAccounts, key)
-			delete(s.snapStorage, key)
+			// DELETE ACCOUNT FROM TRIE
+			if err := s.trie.TryUpdate_SetKey(key[:], nil); err != nil {
+				s.setError(fmt.Errorf("updateStateObject (%x) error: %v", key[:], err))
+			}
 		}
 	}
 

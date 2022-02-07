@@ -48,6 +48,7 @@ var (
 	// to save the leaf info while traversing the trie (joonha)
 	Accounts = make([][]byte, 0)
 	Keys = make([]common.Hash, 0)	
+	Slots = make(map[common.Hash][]byte)
 )
 
 // LeafCallback is a callback type invoked when a trie operation reaches a leaf
@@ -248,8 +249,8 @@ func (t *Trie) tryGetAll(currNode node, parentKey, lastKey []byte, pos int) {
 			fmt.Println("detected account: ", common.BytesToAddress(n))
 			Keys = append(Keys, hk)
 
-			// delete the account
-			t.TryUpdate(hk[:], nil)
+			// // delete the account
+			// t.TryUpdate(hk[:], nil)
 			fmt.Println("3. k is ", hk[:])
 
 			n = nil
@@ -464,6 +465,95 @@ func (t *Trie) tryGetAll(currNode node, parentKey, lastKey []byte, pos int) {
 // 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 // 	}
 // }
+
+// (joonha)
+func (t *Trie) TryGetAllSlots() (map[common.Hash][]byte, error) {
+	
+	// init
+	Slots = make(map[common.Hash][]byte)
+	firstKey := common.Int64ToHash(0)
+	t.tryGetAllSlots(t.root, keybytesToHex(firstKey[:]), 0)
+	return Slots, nil
+}
+
+// (joonha)
+func (t *Trie) tryGetAllSlots(currNode node, parentKey[]byte, pos int) {
+	
+	// fmt.Println("pos: ", pos)
+
+	switch n := (currNode).(type) {
+	case nil:
+		fmt.Println("NODE IS NIL")
+		return 
+	case valueNode:
+		fmt.Println("VALUENODE")
+		// in this case, should archive the node into the result array
+		if n != nil {
+
+			fmt.Println("1. parentKey is", parentKey)
+			fmt.Println("hexToKeybytes(parentKey): ", hexToKeybytes(parentKey))
+			fmt.Println("common.BytesToHash(hexToKeybytes(parentKey)): ", common.BytesToHash(hexToKeybytes(parentKey)))
+			slotKey := common.BytesToHash(hexToKeybytes(parentKey))
+			Slots[slotKey] = n
+
+			// // found non-nil account
+			// // Accounts = append(Accounts, n)
+			// fmt.Println("detected account: ", common.BytesToAddress(n))
+			// // Keys = append(Keys, hk)
+
+			// fmt.Println("n: ", n)
+
+			// // delete the account
+			// t.TryUpdate(hk[:], nil)
+			// fmt.Println("3. k is ", hk[:])
+
+			n = nil
+		}
+		fmt.Println("\n\n")
+		return 
+	case *shortNode:
+		fmt.Println("SHORTNODE")
+		fmt.Println("shortNode n.Key is ", n.Key)
+		fmt.Println("shortNode key length is ", len(n.Key))
+
+		// shortNode Key copy from n.Key to key
+		// direct key edit affects other nodes, so use tempKey
+		tempKey := make([]byte, len(parentKey))
+		copy(tempKey, parentKey)
+		// fmt.Println("shortNode tempKey before appending: ", common.BytesToHash(tempKey))
+		for i := 0; i < len(n.Key); i++ {
+			// fmt.Println("appending ", n.Key[i])
+			tempKey[pos+i] = n.Key[i] 
+		}
+		// fmt.Println("shortNode tempKey after appending: ", common.BytesToHash(tempKey))
+
+		t.tryGetAllSlots(n.Val, tempKey, pos+len(n.Key))
+		return 
+	case *fullNode:
+		fmt.Println("FULLNODE")	
+		for i := 0; i < 16; i++ {
+
+			tempKey := make([]byte, len(parentKey))
+			copy(tempKey, parentKey)
+			tempKey[pos] = byte(i)
+			fmt.Println("tempKey: ", tempKey)
+
+			t.tryGetAllSlots(n.Children[i], tempKey, pos+1)
+		}
+		return 
+	case hashNode:
+		fmt.Println("HASHNODE")
+		fmt.Println("hashNode parentKey is ", parentKey)
+		child, err := t.resolveHash(n, parentKey[:pos])
+		if err != nil {
+			return 
+		}
+		t.tryGetAllSlots(child, parentKey, pos)
+		return 
+	default:
+		panic(fmt.Sprintf("%T: invalid node: %v", currNode, currNode))
+	}
+}
 
 // TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
 // possible to use keybyte-encoding as the path might contain odd nibbles.
