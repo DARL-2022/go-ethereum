@@ -770,9 +770,6 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 
 // commit is the private locked version of Commit.
 func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner, callback func(common.Hash)) error {
-	fmt.Println("\n/***********************************/")
-	fmt.Println("// TRIE >> commit")
-	fmt.Println("/***********************************/")
 	// fmt.Println("triedb.commit() -> node hash:", hash.Hex())
 	// If the node does not exist, it's a previously committed node
 
@@ -935,29 +932,10 @@ func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, st
 	}
 }
 
-// // delete state trie leaf nodes when inactivate or restore (joonha)
-// func (db *Database) DeleteStateTrieNode(keyList map[common.Hash][]common.Hash) {
-// 	fmt.Println("\n/***********************************/")
-// 	fmt.Println("// TRIE >> database.go >> DELETETRIENODE")
-// 	fmt.Println("/***********************************/")
-
-// 	fmt.Println("deleting accountHash List: ", keyList)
-
-// 	batch := db.diskdb.NewBatch()
-// 	for key, _ := range keyList {
-// 		fmt.Println("accountHash: ", key)
-// 		rawdb.DeleteTrieNode(batch, key)
-// 	}
-// }
-
 // delete storage trie leaf nodes when inactivate or restore (joonha)
 func (db *Database) DeleteStorageTrieNode(accountHash common.Hash) {
-
-	fmt.Println("/***********************************/")
-	fmt.Println("// TRIE >> database.go >> DELETETRIENODE")
-	fmt.Println("/***********************************/")
-
-	fmt.Println("DeleteStorageTrieNode > accountHash: ", accountHash)
+	
+	fmt.Println("\nDeleteStorageTrieNode > accountHash: ", accountHash)
 
 	batch := db.diskdb.NewBatch()
 

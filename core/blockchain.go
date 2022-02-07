@@ -1494,14 +1494,11 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	if (block.Header().Number.Int64()) % common.DeleteLeafNodeEpoch == 0 { // at every delete epoch
 		fmt.Println("THIS IS THE DELETING EPOCH\n")
 		for _, addr := range common.AccountsToDeleteFromDisk {
-
-			fmt.Println("addr: ", addr)
+			fmt.Println("\nDeleting addr: ", addr)
 
 			// 1. get obj's storage trie
 			storageTrie := state.GetTrie(addr)
-			fmt.Println("storageTrie: ", storageTrie)
-
-			fmt.Println("triedb: ", triedb)
+			// fmt.Println("storageTrie: ", storageTrie)
 
 			// 2. delete every nodes found during trie traversing from disk
 			storageTrie.Delete_storageTrie() // --> secure_trie.go >> trie.go >> node.go
@@ -1512,7 +1509,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	}
 
 	// print database inspect result (jmlee)
-	fmt.Println("block inserted -> blocknumber:", block.Header().Number.Int64())
+	fmt.Println("\nblock inserted -> blocknumber:", block.Header().Number.Int64())
 	fmt.Println("InactiveBoundaryKey:", common.InactiveBoundaryKey)
 	fmt.Println("common.CheckpointKeys:", common.CheckpointKeys)
 	if block.Header().Number.Int64() % 1 == 0 {
