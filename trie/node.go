@@ -335,12 +335,12 @@ func (n valueNode) toString_storageTrie(ind string, db *Database) string {
 // Call db.DeleteStorageTrieNode(/* node's accountHash */) to delete node from disk
 func (n *fullNode) delete_storageTrie(ind string, db *Database) string {
 	
-	fmt.Println("FULLNODE")
+	// fmt.Println("FULLNODE")
 
 	// print branch node
 	hashnode, _ := n.cache()
 	hash := common.BytesToHash(hashnode)
-	fmt.Println("(fullnode hash: ", hash, ")")
+	// fmt.Println("(fullnode hash: ", hash, ")")
 
 	resp := fmt.Sprintf("[\n")
 	resp += fmt.Sprintf("%s fullNode - hash: %s\n", ind, hash.Hex())
@@ -357,13 +357,13 @@ func (n *fullNode) delete_storageTrie(ind string, db *Database) string {
 	return resp + fmt.Sprintf("\n%s] ", ind)
 }
 func (n *shortNode) delete_storageTrie(ind string, db *Database) string {
-	fmt.Println("SHORTNODE")
+	// fmt.Println("SHORTNODE")
 	// print extension or leaf node
 	// if n.Val is branch node, then this node is extension node & n.Key is common prefix
 	// if n.Val is account, then this node is leaf node & n.Key is left address of the account (along the path)
 	hashnode, _ := n.cache()
 	hash := common.BytesToHash(hashnode)
-	fmt.Println("(shortnode hash: ", hash, ")")
+	// fmt.Println("(shortnode hash: ", hash, ")")
 
 	// delete short node
 	db.DeleteStorageTrieNode(hash)
@@ -371,7 +371,7 @@ func (n *shortNode) delete_storageTrie(ind string, db *Database) string {
 	return fmt.Sprintf("\n\t\tshortNode hash: %s, \n\t\tkey: %x \n\t\t%v", hash.Hex(), common.BytesToHash(n.Key), n.Val.delete_storageTrie(ind+"  ", db))
 }
 func (n hashNode) delete_storageTrie(ind string, db *Database) string {
-	fmt.Println("HASHNODE\n")
+	// fmt.Println("HASHNODE\n")
 	// resolve hashNode (get node from db)
 	hash := common.BytesToHash([]byte(n))
 	// fmt.Println("(hashnode hash: ", hash, ")")
@@ -388,7 +388,7 @@ func (n hashNode) delete_storageTrie(ind string, db *Database) string {
 }
 
 func (n valueNode) delete_storageTrie(ind string, db *Database) string {
-	fmt.Println("VALUENODE\n")
+	// fmt.Println("VALUENODE\n")
 
 	// // get accountHash of this node
 	// hash := common.BytesToHash(n)

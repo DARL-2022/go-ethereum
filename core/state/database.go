@@ -115,7 +115,6 @@ type Trie interface {
 	TryGetAllSlots() (map[common.Hash][]byte, error)
 	Print()
 	Print_storageTrie()
-	GetDB() *trie.Database 
 	Delete_storageTrie()
 }
 

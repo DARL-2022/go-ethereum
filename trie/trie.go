@@ -172,75 +172,54 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 	}
 }
 
-// return the found accounts and the keys of the accounts (joonha)
-// this also deletes found leaf nodes from the trie memory
+// TryGetAll returns all found accounts and the keys of that accounts (joonha)
 func (t *Trie) TryGetAll(firstKey, lastKey []byte) ([][]byte, []common.Hash, error) {
-	
 	// init
 	Accounts = make([][]byte, 0)
 	Keys = make([]common.Hash, 0)	
 	
 	t.tryGetAll(t.root, keybytesToHex(firstKey), keybytesToHex(lastKey), 0)
-	// _, newroot, didResolve, err := t.tryGetAll(t.root, keybytesToHex(firstKey), keybytesToHex(lastKey), 0)
-	// if err == nil && didResolve {
-	// 	t.root = newroot
-	// }
-	// return Accounts, Keys, err
 	return Accounts, Keys, nil
 }
 
 // RE (220128)
 // TODO(joonha): rename this function. tryGetAll is too vague.
-// DFS by recursion and delete found leaf nodes from the trie memory (joonha)
+// DFS by recursion and find all the existing value nodes (joonha)
 func (t *Trie) tryGetAll(currNode node, parentKey, lastKey []byte, pos int) {
 	
-	// (joonha)
 	/****************************************************************************/ 
 	// this function does:
 	// [TRAVERSE] from the firstKey to the lastKey
 	// [FIND] non-nil valueNodes to delete
 	// [SAVE] the found account info to the Accounts array and the Keys array
-	// [DELETE] the account(set nil) in order to inactivate the account
 	//
 	// pos: pointer pointing each digit of the key (related to the trie depth)
-	/****************************************************************************/
-
 	// n.Key : n's key -> 전체가 아님. 특히 숏노드의 경우, 그 짧은 공통 부분만을 키로 가지고 있음.
 	// n : encountered node
-
-	// TODO remove return values. make it void.
-
-	fmt.Println("pos: ", pos)
+	/****************************************************************************/
 
 	switch n := (currNode).(type) {
 	case nil:
-		fmt.Println("NODE IS NIL")
-		// return nil, nil, false, nil
+		// fmt.Println("NODE IS NIL")
 		return 
-	case valueNode: // leaf node
-		fmt.Println("VALUENODE")
-		// in this case, should archive the node into the result array
+
+	case valueNode: // in this case, should archive the node into the result array
+		// fmt.Println("VALUENODE")
 		if n != nil {
-
-			fmt.Println("1. parentKey is", parentKey)
-
 			// key of that account
 			k := big.NewInt(0)
 			for i := 0; i < len(parentKey[:pos-1]); i++ {
 				k = k.Add(k, big.NewInt(int64(math.Pow(16, float64(i)) * float64(parentKey[len(parentKey[:pos-1]) - i - 1]))))
 			}
 			hk := common.BigToHash(k)
-			fmt.Println("2. hk is ", hk)
 
 			// boundary check
 			if common.HashToInt64(hk) < common.InactiveBoundaryKey {
-				fmt.Println("[out of range] key < common.InactiveBoundaryKey\n\n")
-				// return n, n, false, nil
-				// return nil, nil, false, nil
+				// fmt.Println("[out of range] key < common.InactiveBoundaryKey\n\n")
 				return 
 			}
 			if bytes.Compare(parentKey, lastKey) >= 0 { // key >= lastKey
-				fmt.Println("[out of range] key >= lastKey")
+				// fmt.Println("[out of range] key >= lastKey")
 				return 
 			}
 
@@ -251,305 +230,105 @@ func (t *Trie) tryGetAll(currNode node, parentKey, lastKey []byte, pos int) {
 
 			// // delete the account
 			// t.TryUpdate(hk[:], nil)
-			fmt.Println("3. k is ", hk[:])
-
-			n = nil
 		}
-		fmt.Println("\n\n")
-
-		// return n, n, false, nil
 		return 
-	case *shortNode:
-		fmt.Println("SHORTNODE")
-		fmt.Println("shortNode n.Key is ", n.Key)
-		fmt.Println("shortNode key length is ", len(n.Key))
 
-		// shortNode Key copy from n.Key to key
-		// direct key edit affects other nodes, so use tempKey
+	case *shortNode:
+		// fmt.Println("SHORTNODE")
+
+		// shortNode Key copy from n.Key to key (direct key edit affects other nodes, so use tempKey)
 		tempKey := make([]byte, len(parentKey))
 		copy(tempKey, parentKey)
-		fmt.Println("shortNode tempKey before appending: ", common.BytesToHash(tempKey))
 		for i := 0; i < len(n.Key); i++ {
-			fmt.Println("appending ", n.Key[i])
 			tempKey[pos+i] = n.Key[i] 
 		}
-		fmt.Println("shortNode tempKey after appending: ", common.BytesToHash(tempKey))
-
 		t.tryGetAll(n.Val, tempKey, lastKey, pos+len(n.Key))
-		// value, newnode, didResolve, err = t.tryGetAll(n.Val, tempKey, lastKey, pos+len(n.Key))
-		// if err == nil && didResolve {
-		// 	n = n.copy()
-		// 	n.Val = newnode
-		// }
-		// return value, n, didResolve, err 
 		return 
+
 	case *fullNode:
-		fmt.Println("FULLNODE")	
-		// (original code) 기존에는 해당하는 pos 밑으로만 내려감.
-		// value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1) // --> original traversing code
-
+		// fmt.Println("FULLNODE")	
 		for i := 0; i < 16; i++ {
-
-			// // This boundary checking occurs an err. So I moved this to valueNode part.
-			// if bytes.Compare(parentKey, lastKey) >= 0 { // key >= lastKey
-			// 	fmt.Println("parentKey >= lastKey")
-			// 	break;
-			// }
-			// if common.HashToInt64(common.BytesToHash(parentKey)) < common.InactiveBoundaryKey {
-			// 	fmt.Println("parentKey < common.InactiveBoundaryKey")
-			// 	break;
-			// }
-
 			tempKey := make([]byte, len(parentKey))
 			copy(tempKey, parentKey)
 			tempKey[pos] = byte(i)
-			fmt.Println("tempKey: ", tempKey)
-
+			// fmt.Println("tempKey: ", tempKey)
 			t.tryGetAll(n.Children[i], tempKey, lastKey, pos+1)
-			// value, newnode, didResolve, err = t.tryGetAll(n.Children[i], tempKey, lastKey, pos+1)
 		}
-
-		// if err == nil && didResolve {
-		// 	n = n.copy()
-		// 	n.Children[parentKey[pos]] = newnode
-		// }
-		// return value, n, didResolve, err
 		return 
+
 	case hashNode:
-		fmt.Println("HASHNODE")
-		fmt.Println("hashNode parentKey is ", parentKey)
+		// fmt.Println("HASHNODE")
 		child, err := t.resolveHash(n, parentKey[:pos])
 		if err != nil {
-			// return nil, n, true, err
 			return 
 		}
 		t.tryGetAll(child, parentKey, lastKey, pos)
-		// value, newnode, _, err := t.tryGetAll(child, parentKey, lastKey, pos)
-		// return value, newnode, true, err
 		return 
+
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", currNode, currNode))
 	}
 }
 
-
-// // TODO(joonha): rename this function. tryGetAll is too vague.
-// // DFS by recursion and delete found leaf nodes from the trie memory (joonha)
-// func (t *Trie) tryGetAll(origNode node, key, lastKey []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
-	
-// 	// (joonha)
-// 	/****************************************************************************/ 
-// 	// this function does:
-// 	// [TRAVERSE] from the firstKey to the lastKey
-// 	// [FIND] non-nil valueNodes to delete
-// 	// [SAVE] the found account info to the Accounts array and the Keys array
-// 	// [DELETE] the account(set nil) in order to inactivate the account
-// 	//
-// 	// pos: pointer pointing each digit of the key (related to the trie depth)
-// 	/****************************************************************************/
-
-// 	// n.Key : n's key -> 전체가 아님. 특히 숏노드의 경우, 그 짧은 공통 부분만을 키로 가지고 있음.
-// 	// key = firstKey
-// 	// n : encountered node
-
-// 	fmt.Println("pos: ", pos)
-
-// 	switch n := (origNode).(type) {
-// 	case nil:
-// 		fmt.Println("NODE IS NIL")
-// 		return nil, nil, false, nil
-// 	case valueNode: // leaf node
-// 		fmt.Println("VALUENODE")
-// 		// in this case, should archive the node into the result array
-// 		if n != nil {
-
-// 			fmt.Println("1. key is", key)
-
-// 			// key of that account
-// 			k := big.NewInt(0)
-// 			for i := 0; i < len(key[:pos-1]); i++ {
-// 				k = k.Add(k, big.NewInt(int64(math.Pow(16, float64(i)) * float64(key[len(key[:pos-1]) - i - 1]))))
-// 			}
-// 			hk := common.BigToHash(k)
-// 			fmt.Println("2. hk is ", hk)
-
-// 			// boundary check
-// 			if common.HashToInt64(hk) < common.InactiveBoundaryKey {
-// 				fmt.Println(">>> this value node is left to InactiveBoundaryKey\n\n")
-// 				// return n, n, false, nil
-// 				return nil, nil, false, nil
-// 			}
-
-// 			// found non-nil account
-// 			Accounts = append(Accounts, n)
-// 			fmt.Println("detected account: ", common.BytesToAddress(n))
-// 			Keys = append(Keys, hk)
-
-// 			// delete the account
-// 			t.TryUpdate(hk[:], nil)
-// 			fmt.Println("3. k is ", hk[:])
-
-// 			n = nil
-// 		}
-// 		fmt.Println("\n\n")
-
-// 		return n, n, false, nil
-// 	case *shortNode:
-// 		fmt.Println("SHORTNODE")
-// 		fmt.Println("shortNode n.Key is ", n.Key)
-// 		fmt.Println("shortNode key length is ", len(n.Key))
-
-// 		// shortNode Key copy from n.Key to key
-// 		// direct key edit affects other nodes, so use tempKey
-// 		tempKey := make([]byte, len(key))
-// 		copy(tempKey, key)
-// 		fmt.Println("shortNode tempKey before appending: ", common.BytesToHash(tempKey))
-// 		for i := 0; i < len(n.Key); i++ {
-// 			fmt.Println("appending ", n.Key[i])
-// 			tempKey[pos+i] = n.Key[i] // 덮어쓰기가 되고 있는 것 같다.
-// 			// tempKey[len(key) - 1 + i] = n.Key[i] // 16 제외하고 맨 끝에 이어 붙이기.
-// 		}
-// 		fmt.Println("shortNode tempKey after appending: ", common.BytesToHash(tempKey))
-
-// 		value, newnode, didResolve, err = t.tryGetAll(n.Val, tempKey, lastKey, pos+len(n.Key))
-// 		if err == nil && didResolve {
-// 			n = n.copy()
-// 			n.Val = newnode
-// 		}
-// 		return value, n, didResolve, err 
-// 	case *fullNode:
-// 		fmt.Println("FULLNODE")	
-// 		// (original code) 기존에는 해당하는 pos 밑으로만 내려감.
-// 		// value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
-
-// 		// fullnode에서 firstKey 이후의 브랜치를 모두 탐색함.
-// 		for i := key[pos]; i < 16; i++ {
-
-// 			// 만약 lastKey를 넘어가면 탐색 종료
-// 			if bytes.Compare(key, lastKey) >= 0 { // key >= lastKey
-// 				fmt.Println("key >= lastKey")
-// 				break;
-// 			}
-
-// 			fmt.Println("fullNode key is ", key)
-// 			fmt.Println("(fullnode)pos: ", pos)
-// 			fmt.Println("key[pos] is ", key[pos])
-// 			fmt.Println("")
-// 			value, newnode, didResolve, err = t.tryGetAll(n.Children[i], key, lastKey, pos+1)
-			
-// 			// 해당 자릿수에서 탐색 타깃을 변경
-// 			if key[pos] != 15 {
-// 				// fmt.Println("key[pos] is ", key[pos])
-// 				key[pos] = key[pos] + 1 
-// 			} else {
-// 				// fmt.Println("key[pos] is ", key[pos])
-// 				key[pos] = 0
-// 			}
-// 		}
-
-// 		if err == nil && didResolve {
-// 			n = n.copy()
-// 			n.Children[key[pos]] = newnode
-// 		}
-// 		return value, n, didResolve, err
-// 	case hashNode:
-// 		fmt.Println("HASHNODE")
-// 		fmt.Println("hashNode key is ", key)
-// 		child, err := t.resolveHash(n, key[:pos])
-// 		if err != nil {
-// 			return nil, n, true, err
-// 		}
-// 		value, newnode, _, err := t.tryGetAll(child, key, lastKey, pos)
-// 		return value, newnode, true, err
-// 	default:
-// 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
-// 	}
-// }
-
-// (joonha)
+// TryGetAllSlots return all the found slots while traversing storage trie (joonha)
 func (t *Trie) TryGetAllSlots() (map[common.Hash][]byte, error) {
-	
 	// init
 	Slots = make(map[common.Hash][]byte)
 	firstKey := common.Int64ToHash(0)
+
 	t.tryGetAllSlots(t.root, keybytesToHex(firstKey[:]), 0)
 	return Slots, nil
 }
 
 // (joonha)
 func (t *Trie) tryGetAllSlots(currNode node, parentKey[]byte, pos int) {
-	
-	// fmt.Println("pos: ", pos)
-
 	switch n := (currNode).(type) {
 	case nil:
-		fmt.Println("NODE IS NIL")
+		// fmt.Println("NODE IS NIL")
 		return 
-	case valueNode:
-		fmt.Println("VALUENODE")
-		// in this case, should archive the node into the result array
-		if n != nil {
 
-			fmt.Println("1. parentKey is", parentKey)
-			fmt.Println("hexToKeybytes(parentKey): ", hexToKeybytes(parentKey))
-			fmt.Println("common.BytesToHash(hexToKeybytes(parentKey)): ", common.BytesToHash(hexToKeybytes(parentKey)))
+	case valueNode: // in this case, should archive the slot into the result array
+		// fmt.Println("VALUENODE")
+		if n != nil {
 			slotKey := common.BytesToHash(hexToKeybytes(parentKey))
 			Slots[slotKey] = n
-
-			// // found non-nil account
-			// // Accounts = append(Accounts, n)
-			// fmt.Println("detected account: ", common.BytesToAddress(n))
-			// // Keys = append(Keys, hk)
-
-			// fmt.Println("n: ", n)
-
-			// // delete the account
-			// t.TryUpdate(hk[:], nil)
-			// fmt.Println("3. k is ", hk[:])
-
-			n = nil
 		}
-		fmt.Println("\n\n")
 		return 
+
 	case *shortNode:
-		fmt.Println("SHORTNODE")
-		fmt.Println("shortNode n.Key is ", n.Key)
-		fmt.Println("shortNode key length is ", len(n.Key))
+		// fmt.Println("SHORTNODE")
 
 		// shortNode Key copy from n.Key to key
 		// direct key edit affects other nodes, so use tempKey
 		tempKey := make([]byte, len(parentKey))
 		copy(tempKey, parentKey)
-		// fmt.Println("shortNode tempKey before appending: ", common.BytesToHash(tempKey))
 		for i := 0; i < len(n.Key); i++ {
-			// fmt.Println("appending ", n.Key[i])
 			tempKey[pos+i] = n.Key[i] 
 		}
-		// fmt.Println("shortNode tempKey after appending: ", common.BytesToHash(tempKey))
 
 		t.tryGetAllSlots(n.Val, tempKey, pos+len(n.Key))
 		return 
+	
 	case *fullNode:
-		fmt.Println("FULLNODE")	
+		// fmt.Println("FULLNODE")	
 		for i := 0; i < 16; i++ {
-
 			tempKey := make([]byte, len(parentKey))
 			copy(tempKey, parentKey)
 			tempKey[pos] = byte(i)
-			fmt.Println("tempKey: ", tempKey)
-
+			// fmt.Println("tempKey: ", tempKey)
 			t.tryGetAllSlots(n.Children[i], tempKey, pos+1)
 		}
 		return 
+
 	case hashNode:
-		fmt.Println("HASHNODE")
-		fmt.Println("hashNode parentKey is ", parentKey)
+		// fmt.Println("HASHNODE")
 		child, err := t.resolveHash(n, parentKey[:pos])
 		if err != nil {
 			return 
 		}
 		t.tryGetAllSlots(child, parentKey, pos)
 		return 
+
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", currNode, currNode))
 	}
@@ -894,7 +673,6 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 	return nil, &MissingNodeError{NodeHash: hash, Path: prefix}
 }
 
-// flag (joonha)
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
@@ -989,7 +767,6 @@ func (t *Trie) Print_storageTrie() {
 
 // Delete_storageTrie deletes storage trie's all nodes from disk (joonha)
 func (t *Trie) Delete_storageTrie() {
-	fmt.Println("Trie > Delete Storage > 1")
 	if t == nil {
 		fmt.Println("t is nil")
 		return 
@@ -1011,11 +788,6 @@ func (t *Trie) Size() common.StorageSize {
 func NewEmpty() *Trie {
 	trie, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
 	return trie
-}
-
-// GetDB returns trie's db (joonha)
-func (t *Trie) GetDB() *Database {
-	return t.db
 }
 
 func (t *Trie) MyCommit() {
