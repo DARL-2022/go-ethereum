@@ -165,8 +165,6 @@ func PrintTxDetail(blocknumber int) {
 		return true
 	})
 
-	fmt.Println(dirpath, temp, path)
-
 	f1, err := os.Create(path + "TxDetail_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt") // goroutine version
 	if err != nil {
 		fmt.Println("Cannot create result file.", err)
