@@ -1,0 +1,2 @@
+PrintTxDetail in block 20000
+

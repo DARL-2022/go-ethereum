@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"sync"
@@ -13,9 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var dirpath = filepath.Dir(os.Args[0])
-var temp, _ = filepath.Abs(dirpath)
-var path = temp[:len(temp)-len(dirpath)] + "txDetail/" // "/home/jhkim/go/src/github.com/ethereum/go-ethereum1.10.15/txDetail/"
+var path = "/home/jhkim/go/src/github.com/ethereum/go-ethereum/txDetail/"
 var _ = os.MkdirAll(path, 0777)
 
 func increaseSize(nodeSize int, node string, tir *TrieInspectResult, depth int) {
@@ -167,6 +164,8 @@ func PrintTxDetail(blocknumber int) {
 
 		return true
 	})
+
+	fmt.Println(dirpath, temp, path)
 
 	f1, err := os.Create(path + "TxDetail_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt") // goroutine version
 	if err != nil {
