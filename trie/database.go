@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"reflect"
 	"runtime"
 	"sync"
@@ -758,15 +757,15 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	// If the node does not exist, it's a previously committed node
 
 	// jhkim: count duplicated flushed node. It should be done before check db.dirties
-	if hash != common.HexToHash("0x0") {
-		if list, ok := common.FlushedNodeDuplicate_block[hash]; ok {
-			// common.FlushedNodeDuplicate[hash] = count + 1 // after first count
-			common.FlushedNodeDuplicate_block[hash] = append(list, common.GlobalBlockNumber)
-		} else {
-			// common.FlushedNodeDuplicate[hash] = 2 // one is in trie and the other is now counted
-			common.FlushedNodeDuplicate_block[hash] = append(list, common.GlobalBlockNumber)
-		}
-	}
+	// if hash != common.HexToHash("0x0") {
+	// 	if list, ok := common.FlushedNodeDuplicate_block[hash]; ok {
+	// 		// common.FlushedNodeDuplicate[hash] = count + 1 // after first count
+	// 		common.FlushedNodeDuplicate_block[hash] = append(list, common.GlobalBlockNumber)
+	// 	} else {
+	// 		// common.FlushedNodeDuplicate[hash] = 2 // one is in trie and the other is now counted
+	// 		common.FlushedNodeDuplicate_block[hash] = append(list, common.GlobalBlockNumber)
+	// 	}
+	// }
 
 	node, ok := db.dirties[hash]
 	if !ok {
@@ -784,17 +783,17 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 
 	// print newly commited nodes. (jhkim)
 	// flushednodelist = appends(flushednodelist, hash)
-	switch n := node.node.(type) {
-	case rawFullNode:
-		common.FlushedNodeList[hash] = 1
+	// switch n := node.node.(type) {
+	// case rawFullNode:
+	// 	common.FlushedNodeList[hash] = 1
 
-	case *rawShortNode:
-		common.FlushedNodeList[hash] = 2
+	// case *rawShortNode:
+	// 	common.FlushedNodeList[hash] = 2
 
-	default:
-		fmt.Printf("Neither Full nor Short node. It's type is %T\n", n)
-		os.Exit(0)
-	}
+	// default:
+	// 	fmt.Printf("Neither Full nor Short node. It's type is %T\n", n)
+	// 	os.Exit(0)
+	// }
 
 	// If we've reached an optimal batch size, commit and start over
 	rawdb.WriteTrieNode(batch, hash, node.rlp())

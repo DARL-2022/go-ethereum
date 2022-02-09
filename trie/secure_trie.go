@@ -149,7 +149,6 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 	return nil
 }
 
-var MapMutex = new(sync.RWMutex)
 var Mutex = new(sync.Mutex)
 
 func writeTxHash(txHash common.Hash, hk, key []byte) {

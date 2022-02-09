@@ -128,39 +128,42 @@ func PrintTxDetail(blocknumber int) {
 		k := key.(common.Hash)
 		v := value.(*TxInformation)
 
-		s += fmt.Sprintln("TxID: ", k)
-		s += fmt.Sprintln("  Block: ", v.BlockNumber)
-		if v.Types == 1 {
-			s += fmt.Sprintln("  TxInformation: Transfer")
-			// s += fmt.Sprintln("  TxInformation: Transfer or Contract call")
-		} else if v.Types == 2 {
-			s += fmt.Sprintln("  TxInformation: Contract creation tx")
-		} else if v.Types == 3 {
-			s += fmt.Sprintln("  TxInformation: Contract call")
-		} else {
-			s += fmt.Sprintln("  Wrong Tx Information")
-		}
-
-		s += fmt.Sprintln("    From: \t\t", v.From)
-		if v.Types == 1 {
-			s += fmt.Sprintln("    To(EOA): \t\t", v.To)
-			// s += fmt.Sprintln("    To: \t\t", v.To)
-		} else if v.Types == 3 {
-			s += fmt.Sprintln("    To(CA): \t\t", v.To)
-		}
-
 		if v.Types != 1 {
-			s += fmt.Sprintln("    Contract related Address")
-			for _, v := range v.Else {
-				s += fmt.Sprintln("      EOA: ", v) // transition reward of miner and EOAs called by contract
-			}
-			for kk, vv := range v.ContractAddress_SlotHash {
 
-				s += fmt.Sprintln("      Contract Address: ", kk)
-				s += fmt.Sprintln("        SlotHash: ", vv)
+			s += fmt.Sprintln("TxID: ", k)
+			s += fmt.Sprintln("  Block: ", v.BlockNumber)
+			if v.Types == 1 {
+				s += fmt.Sprintln("  TxInformation: Transfer")
+				// s += fmt.Sprintln("  TxInformation: Transfer or Contract call")
+			} else if v.Types == 2 {
+				s += fmt.Sprintln("  TxInformation: Contract creation tx")
+			} else if v.Types == 3 {
+				s += fmt.Sprintln("  TxInformation: Contract call")
+			} else {
+				s += fmt.Sprintln("  Wrong Tx Information")
 			}
+
+			s += fmt.Sprintln("    From: \t\t", v.From)
+			if v.Types == 1 {
+				s += fmt.Sprintln("    To(EOA): \t\t", v.To)
+				// s += fmt.Sprintln("    To: \t\t", v.To)
+			} else if v.Types == 3 {
+				s += fmt.Sprintln("    To(CA): \t\t", v.To)
+			}
+
+			if v.Types != 1 {
+				s += fmt.Sprintln("    Contract related Address")
+				for _, v := range v.Else {
+					s += fmt.Sprintln("      EOA: ", v) // transition reward of miner and EOAs called by contract
+				}
+				for kk, vv := range v.ContractAddress_SlotHash {
+
+					s += fmt.Sprintln("      Contract Address: ", kk)
+					s += fmt.Sprintln("        SlotHash: ", vv)
+				}
+			}
+			s += fmt.Sprintln()
 		}
-		s += fmt.Sprintln()
 
 		return true
 	})
@@ -172,6 +175,8 @@ func PrintTxDetail(blocknumber int) {
 	}
 	defer f1.Close()
 	fmt.Fprintln(f1, s) // write text file
+
+	common.TxDetailSyncMap = sync.Map{}
 
 	s = ""
 	common.TrieUpdateElse.Range(func(key, value interface{}) bool {
@@ -199,7 +204,7 @@ func PrintTxDetail(blocknumber int) {
 	fmt.Fprintln(f2, s) // write text file
 
 	common.TrieUpdateElse = sync.Map{}
-	common.TxDetailSyncMap = sync.Map{}
+
 }
 
 func MakeDuplicatedFlushedNode(blocknumber int) {
