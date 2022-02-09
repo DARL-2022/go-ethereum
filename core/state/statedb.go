@@ -382,6 +382,16 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
+// AddBalance2 adds amount to the account associated with addr. (jhkim)
+// AddBalance2 is used for mining reward
+func (s *StateDB) AddBalance2(addr common.Address, amount *big.Int) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.txHash = common.HexToHash("0x0")
+		stateObject.AddBalance(amount)
+	}
+}
+
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
@@ -460,7 +470,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	}
 	// Encode the account and update the account trie
 	addr := obj.Address()
-	if err := s.trie.TryUpdateAccount(addr[:], &obj.data); err != nil {
+	if err := s.trie.TryUpdateAccount(addr[:], &obj.data, obj.txHash); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
 
@@ -567,6 +577,11 @@ func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		stateObject, _ = s.createObject(addr)
+	} else if stateObject.txHash != common.GlobalTxHash {
+		obj := stateObject.deepCopy(s)
+		obj.txHash = common.GlobalTxHash
+		s.stateObjects[addr] = obj // temp setting
+		return obj
 	}
 	return stateObject
 }
@@ -584,6 +599,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 		}
 	}
 	newobj = newObject(s, addr, types.StateAccount{})
+	newobj.txHash = common.GlobalTxHash // jhkim
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
@@ -1044,4 +1060,9 @@ func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
+}
+
+// jhkim
+func (s *StateDB) GetStateObjects() map[common.Address]*stateObject {
+	return s.stateObjects
 }

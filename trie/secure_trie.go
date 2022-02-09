@@ -18,6 +18,7 @@ package trie
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -89,12 +90,34 @@ func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {
 
 // TryUpdate account will abstract the write of an account to the
 // secure trie.
-func (t *SecureTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
+func (t *SecureTrie) TryUpdateAccount(key []byte, acc *types.StateAccount, txHash common.Hash) error {
 	hk := t.hashKey(key)
 	data, err := rlp.EncodeToBytes(acc)
 	if err != nil {
 		return err
 	}
+
+	if common.BytesToAddress(key) == common.HexToAddress("0X0") {
+		// fmt.Println("      0x0 key update/ key:", common.BytesToAddress(key))
+	}
+
+	if common.BytesToHash(key) != common.HexToHash("0x0") {
+		writeAddrHashToAddr(hk, key)
+		// fmt.Println("common.AddrHash2Addr[common.BytesToHash(hk)]/ common.BytesToHash(hk):", common.BytesToHash(hk))
+		if common.BytesToAddress(key) == common.GlobalTxTo || common.BytesToAddress(key) == common.GlobalTxFrom {
+			writeTxHash(txHash, hk, key) // to, from address update
+		} else if txHash != common.HexToHash("0x0") {
+
+			writeTxElse(txHash, key) // except to and from. This includes state trie updates made by internal tx and state transition reward
+
+		} else {
+			// fmt.Println("        txHash 0x0/ key:", common.BytesToAddress(key), "/value:", common.Bytes2Hex(value))
+			// fmt.Println("        txHash 0x0/ key:", common.BytesToAddress(key))
+			common.TrieUpdateElseTemp = append(common.TrieUpdateElseTemp, common.BytesToAddress(key)) // block mining reward. miner and uncle
+		}
+
+	}
+
 	if err := t.trie.TryUpdate(hk, data); err != nil {
 		return err
 	}
@@ -124,6 +147,100 @@ func (t *SecureTrie) Update(key, value []byte) {
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *SecureTrie) TryUpdate(key, value []byte) error {
 	hk := t.hashKey(key)
+	err := t.trie.TryUpdate(hk, value)
+	if err != nil {
+		return err
+	}
+	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+	return nil
+}
+
+var MapMutex = new(sync.RWMutex)
+var Mutex = new(sync.Mutex)
+
+func writeTxHash(txHash common.Hash, hk, key []byte) {
+	if value, ok := common.TxDetailSyncMap.Load(txHash); ok { // concurrent map read and map write
+		TI := value.(*TxInformation)
+		if TI.From == common.BytesToAddress(key) {
+			TI.FromAdrHash = common.BytesToHash(hk)
+			common.TxDetailSyncMap.Store(txHash, TI)
+		} else if TI.To == common.BytesToAddress(key) {
+			TI.ToAdrHash = common.BytesToHash(hk)
+			common.TxDetailSyncMap.Store(txHash, TI)
+		}
+	}
+}
+
+func writeTxElse(txHash common.Hash, key []byte) {
+	// fmt.Println("        Else /key:", common.BytesToAddress(key), "/txhash:", txHash)
+	if value, ok := common.TxDetailSyncMap.Load(txHash); ok { // concurrent map read and map write
+		TI := value.(*TxInformation)
+		TI.Else = append(TI.Else, common.BytesToAddress(key))
+		common.TxDetailSyncMap.Store(txHash, TI)
+	}
+}
+
+func writeAddrHashToAddr(hk, key []byte) {
+	if _, ok := common.AddrHash2AddrSyncMap.Load(common.BytesToHash(hk)); !ok {
+		common.AddrHash2AddrSyncMap.Store(common.BytesToHash(hk), common.BytesToAddress(key))
+	}
+}
+
+func (t *SecureTrie) TryUpdate2(key, value []byte, txHash common.Hash) error {
+	hk := t.hashKey(key)
+	if common.BytesToAddress(key) == common.HexToAddress("0X0") {
+		// fmt.Println("      0x0 key update/ key:", common.BytesToAddress(key))
+	}
+
+	if common.BytesToHash(key) != common.HexToHash("0x0") {
+		writeAddrHashToAddr(hk, key)
+		if common.BytesToAddress(key) == common.GlobalTxTo || common.BytesToAddress(key) == common.GlobalTxFrom {
+			writeTxHash(txHash, hk, key) // to, from address update
+		} else if txHash != common.HexToHash("0x0") {
+			writeTxElse(txHash, key) // except to and from. This includes state trie updates made by internal tx and state transition reward
+		} else {
+			// fmt.Println("        txHash 0x0/ key:", common.BytesToAddress(key))
+			common.TrieUpdateElseTemp = append(common.TrieUpdateElseTemp, common.BytesToAddress(key)) // block mining reward. miner and uncle
+		}
+
+	}
+
+	err := t.trie.TryUpdate(hk, value)
+	if err != nil {
+		return err
+	}
+	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+	return nil
+}
+
+func writeContractAccountSlotHash(txHash, slotHash common.Hash, addr common.Address) {
+	if value, ok := common.TxDetailSyncMap.Load(txHash); ok { // concurrent map read and map write
+		Mutex.Lock()
+		defer Mutex.Unlock()
+
+		TI := value.(*TxInformation)
+		tmp := TI.ContractAddress_SlotHash[addr]
+		if !contain(slotHash, tmp) {
+			tmp = append(tmp, slotHash)
+			TI.ContractAddress_SlotHash[addr] = tmp
+			common.TxDetailSyncMap.Store(txHash, TI)
+		}
+	}
+}
+
+// jhkim
+// TryUpdate function for storage trie. write updated slothash of storage trie in common.TxDetail.SlotHash
+func (t *SecureTrie) MyTryUpdate(key, value []byte, txHash common.Hash, addr common.Address) error {
+	hk := t.hashKey(key)
+	CAaddress := addr
+	if txHash != common.HexToHash("0x0") {
+		slotHash := common.BytesToHash(hk)
+		writeContractAccountSlotHash(txHash, slotHash, CAaddress)
+	} else {
+		slotHash := common.BytesToHash(hk)
+		writeContractAccountSlotHash(common.GlobalTxHash, slotHash, CAaddress)
+	}
+
 	err := t.trie.TryUpdate(hk, value)
 	if err != nil {
 		return err
@@ -216,4 +333,18 @@ func (t *SecureTrie) getSecKeyCache() map[string][]byte {
 		t.secKeyCache = make(map[string][]byte)
 	}
 	return t.secKeyCache
+}
+
+// get trie of secure trie (jmlee)
+func (t *SecureTrie) Trie() *Trie {
+	return &t.trie
+}
+
+// trie size inspectaion (jhkim)
+func (t *SecureTrie) InspectTrie() TrieInspectResult {
+	return t.trie.InspectTrie()
+}
+
+func (t *SecureTrie) InspectStorageTrie() TrieInspectResult {
+	return t.trie.InspectStorageTrie()
 }

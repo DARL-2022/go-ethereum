@@ -69,6 +69,8 @@ type stateObject struct {
 	data     types.StateAccount
 	db       *StateDB
 
+	txHash common.Hash //jhkim
+
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
@@ -117,6 +119,7 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
+		txHash:         common.Hash{}, //jhkim
 	}
 }
 
@@ -350,7 +353,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		} else {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			s.setError(tr.TryUpdate(key[:], v))
+			s.setError(tr.MyTryUpdate(key[:], v, s.txHash, s.address))
 			s.db.StorageUpdated += 1
 		}
 		// If state snapshotting is active, cache the data til commit
@@ -456,6 +459,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.suicided = s.suicided
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
+	stateObject.txHash = s.txHash // jhkim
 	return stateObject
 }
 

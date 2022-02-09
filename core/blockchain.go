@@ -1308,6 +1308,54 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
+
+	// jhkim: write transaction details and flushed node list files every 10000 block
+	// 10000 is heuristic number for not to shutdown
+	common.Flushednode_block[int(block.NumberU64())] = common.FlushedNodeList // append flushed nodehash list
+	common.TrieUpdateElse.Store(common.GlobalBlockNumber, common.TrieUpdateElseTemp)
+
+	if int(block.NumberU64())%10000 == 0 {
+
+		s := ""
+		s += fmt.Sprintf("Write TxDetail in txt file")
+		start := time.Now()
+		trie.PrintTxDetail(int(block.NumberU64()))
+		elapsed := time.Since(start)
+		s += fmt.Sprintln(" in", elapsed.Seconds(), "seconds")
+		fmt.Print(s)
+
+		s = ""
+		s += fmt.Sprintf("Write DuplicatedFlushedNode in txt file")
+		start = time.Now()
+		trie.MakeDuplicatedFlushedNode(int(block.NumberU64()))
+		elapsed = time.Since(start)
+		s += fmt.Sprintln(" in", elapsed.Seconds(), "seconds")
+		fmt.Print(s)
+
+		s = ""
+		s += fmt.Sprintf("Write FlushedNode in txt file")
+		start = time.Now()
+		trie.PrintFlushedNode(int(block.NumberU64()))
+		elapsed = time.Since(start)
+		s += fmt.Sprintln(" in", elapsed.Seconds(), "seconds")
+		fmt.Print(s)
+
+		s = ""
+		s += fmt.Sprintf("Write AddrHash2Addr in txt file")
+		start = time.Now()
+		trie.PrintAddrhash2Addr(int(block.NumberU64()))
+		elapsed = time.Since(start)
+		s += fmt.Sprintln(" in", elapsed.Seconds(), "seconds")
+		fmt.Print(s)
+
+		// os.Exit(1)
+	}
+
+	common.FlushedNodeList = map[common.Hash]int{}
+	common.TrieUpdateElseTemp = []common.Address{}
+	common.GlobalTxHash = common.HexToHash("0x0")
+	common.GlobalBlockNumber = int(block.NumberU64()) + 1
+
 	return status, nil
 }
 
