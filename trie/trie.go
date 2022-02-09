@@ -736,7 +736,7 @@ type Account struct {
 // inspect the trie
 func (t *Trie) InspectTrie() TrieInspectResult {
 	if isFirst {
-		// fmt.Println("First call: InspectTrie function. This should be printed only once")
+
 		isFirst = false
 		debug.SetMaxThreads(15000) // default MaxThread is 10000
 		runtime.GOMAXPROCS(runtime.NumCPU())
@@ -815,9 +815,7 @@ func (t *Trie) inspectTrieNodes(n node, tir *TrieInspectResult, wg *sync.WaitGro
 			os.Exit(1)
 		}
 		addressKey = append(addressKey, n.Key...)
-		// fmt.Println(" (leaf node) ", n.Key)
-		increaseSize(len(nodeBytes), "short", tir, depth) // increase tir
-		// t.inspectTrieNodes(n.Val, tir, wg, depth+1, trie) // go child node
+		increaseSize(len(nodeBytes), "short", tir, depth)             // increase tir
 		t.inspectTrieNodes(n.Val, tir, wg, depth+1, trie, addressKey) // go child node
 
 	case *fullNode:
@@ -838,7 +836,6 @@ func (t *Trie) inspectTrieNodes(n node, tir *TrieInspectResult, wg *sync.WaitGro
 				// nodeKeyByte := common.HexToHash("0x" + indices[i])
 				nodeKeyByte := common.HexToHash("0x" + indices[i])
 				addressKey = append(temp_addressKey, nodeKeyByte[len(nodeKeyByte)-1])
-				// fmt.Println(" (full node) ", nodeKeyByte[len(nodeKeyByte)-1])
 				t.inspectTrieNodes(child, tir, wg, depth+1, trie, addressKey)
 			}
 		}

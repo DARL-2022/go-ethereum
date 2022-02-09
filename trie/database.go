@@ -787,13 +787,10 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	switch n := node.node.(type) {
 	case rawFullNode:
 		common.FlushedNodeList[hash] = 1
-		// flushednode[hash] = 1 // Full Node
-		// fmt.Printf("  newly flushed node / hash: %v, type of node: (Full Node)\n", hash)
+
 	case *rawShortNode:
 		common.FlushedNodeList[hash] = 2
-		// flushednode[hash] = 2 // Short Node
-		// fmt.Printf("  newly flushed node / hash: %v, type of node: (Short Node)\n", hash)
-		// fmt.Println("  shortnode:", common.Bytes2Hex(n.Key))
+
 	default:
 		fmt.Printf("Neither Full nor Short node. It's type is %T\n", n)
 		os.Exit(0)

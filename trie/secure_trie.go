@@ -97,13 +97,9 @@ func (t *SecureTrie) TryUpdateAccount(key []byte, acc *types.StateAccount, txHas
 		return err
 	}
 
-	if common.BytesToAddress(key) == common.HexToAddress("0X0") {
-		// fmt.Println("      0x0 key update/ key:", common.BytesToAddress(key))
-	}
-
 	if common.BytesToHash(key) != common.HexToHash("0x0") {
 		writeAddrHashToAddr(hk, key)
-		// fmt.Println("common.AddrHash2Addr[common.BytesToHash(hk)]/ common.BytesToHash(hk):", common.BytesToHash(hk))
+
 		if common.BytesToAddress(key) == common.GlobalTxTo || common.BytesToAddress(key) == common.GlobalTxFrom {
 			writeTxHash(txHash, hk, key) // to, from address update
 		} else if txHash != common.HexToHash("0x0") {
@@ -111,8 +107,6 @@ func (t *SecureTrie) TryUpdateAccount(key []byte, acc *types.StateAccount, txHas
 			writeTxElse(txHash, key) // except to and from. This includes state trie updates made by internal tx and state transition reward
 
 		} else {
-			// fmt.Println("        txHash 0x0/ key:", common.BytesToAddress(key), "/value:", common.Bytes2Hex(value))
-			// fmt.Println("        txHash 0x0/ key:", common.BytesToAddress(key))
 			common.TrieUpdateElseTemp = append(common.TrieUpdateElseTemp, common.BytesToAddress(key)) // block mining reward. miner and uncle
 		}
 
@@ -172,7 +166,6 @@ func writeTxHash(txHash common.Hash, hk, key []byte) {
 }
 
 func writeTxElse(txHash common.Hash, key []byte) {
-	// fmt.Println("        Else /key:", common.BytesToAddress(key), "/txhash:", txHash)
 	if value, ok := common.TxDetailSyncMap.Load(txHash); ok { // concurrent map read and map write
 		TI := value.(*TxInformation)
 		TI.Else = append(TI.Else, common.BytesToAddress(key))
@@ -188,9 +181,6 @@ func writeAddrHashToAddr(hk, key []byte) {
 
 func (t *SecureTrie) TryUpdate2(key, value []byte, txHash common.Hash) error {
 	hk := t.hashKey(key)
-	if common.BytesToAddress(key) == common.HexToAddress("0X0") {
-		// fmt.Println("      0x0 key update/ key:", common.BytesToAddress(key))
-	}
 
 	if common.BytesToHash(key) != common.HexToHash("0x0") {
 		writeAddrHashToAddr(hk, key)
@@ -199,7 +189,7 @@ func (t *SecureTrie) TryUpdate2(key, value []byte, txHash common.Hash) error {
 		} else if txHash != common.HexToHash("0x0") {
 			writeTxElse(txHash, key) // except to and from. This includes state trie updates made by internal tx and state transition reward
 		} else {
-			// fmt.Println("        txHash 0x0/ key:", common.BytesToAddress(key))
+
 			common.TrieUpdateElseTemp = append(common.TrieUpdateElseTemp, common.BytesToAddress(key)) // block mining reward. miner and uncle
 		}
 

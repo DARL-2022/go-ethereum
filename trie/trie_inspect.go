@@ -15,7 +15,8 @@ import (
 
 var dirpath = filepath.Dir(os.Args[0])
 var temp, _ = filepath.Abs(dirpath)
-var path = temp[:len(temp)-len(dirpath)] // "/home/jhkim/go/src/github.com/ethereum/go-ethereum1.10.15/"
+var path = temp[:len(temp)-len(dirpath)] + "txDetail/" // "/home/jhkim/go/src/github.com/ethereum/go-ethereum1.10.15/txDetail/"
+var _ = os.MkdirAll(path, 0777)
 
 func increaseSize(nodeSize int, node string, tir *TrieInspectResult, depth int) {
 	rwMutex.Lock()
@@ -69,7 +70,6 @@ func PrintFlushedNode(blocknumber int) {
 	s := "FlushednodeList in each block\n"
 	tmp := ""
 	for key, val := range common.Flushednode_block {
-		// fmt.Println(key, val)
 		s += fmt.Sprintf("{\n  Block %d:", key)
 		cf, cn := 0, 0 // count
 		tmp = ""
@@ -88,9 +88,8 @@ func PrintFlushedNode(blocknumber int) {
 		s += fmt.Sprintf(tmp)
 		s += fmt.Sprintf("}\n")
 	}
-	// fmt.Println(s)
 
-	f1, err := os.Create(path + "txDetail/FlushedNode_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt") // goroutine version
+	f1, err := os.Create(path + "FlushedNode_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt") // goroutine version
 	if err != nil {
 		fmt.Printf("Cannot create result file.\n")
 		os.Exit(1)
@@ -115,7 +114,7 @@ func PrintAddrhash2Addr(blocknumber int) {
 
 	s += fmt.Sprintln()
 
-	f2, err := os.Create(path + "txDetail/AddrHash2Addr_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt") // goroutine version
+	f2, err := os.Create(path + "AddrHash2Addr_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt") // goroutine version
 	if err != nil {
 		fmt.Printf("Cannot create result file.\n")
 		os.Exit(1)
@@ -169,9 +168,9 @@ func PrintTxDetail(blocknumber int) {
 		return true
 	})
 
-	f1, err := os.Create(path + "txDetail/TxDetail_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt") // goroutine version
+	f1, err := os.Create(path + "TxDetail_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt") // goroutine version
 	if err != nil {
-		fmt.Printf("Cannot create result file.\n")
+		fmt.Println("Cannot create result file.", err)
 		os.Exit(1)
 	}
 	defer f1.Close()
@@ -194,7 +193,7 @@ func PrintTxDetail(blocknumber int) {
 
 	})
 
-	f2, err := os.Create(path + "txDetail/TrieUpdateElse_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt") // goroutine version
+	f2, err := os.Create(path + "TrieUpdateElse_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt") // goroutine version
 	if err != nil {
 		fmt.Printf("Cannot create result file.\n")
 		os.Exit(1)
@@ -216,7 +215,7 @@ func MakeDuplicatedFlushedNode(blocknumber int) {
 	}
 	s += fmt.Sprintln()
 
-	path := path + "txDetail/DuplicateFlushedNode_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt"
+	path := path + "DuplicateFlushedNode_" + strconv.FormatInt(int64(blocknumber)-10000, 10) + "-" + strconv.FormatInt(int64(blocknumber), 10) + ".txt"
 	if _, err := os.Stat(path); err == nil {
 		// path/to/whatever exists
 		f1, _ := os.Open(path)
