@@ -1000,6 +1000,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		w.current.state.DeletePreviousLeafNodes(keysToDelete)
 		// reset common.KeysToDelete
 		common.KeysToDelete = make([]common.Hash, 0)
+		// reset common.AlreadyRestored (joonha)
+		common.AlreadyRestored = make(map[Hash]Empty) 
 	}
 
 	// inactivate inactive accounts (jmlee)
