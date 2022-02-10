@@ -1085,6 +1085,8 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 		w.current.state.DeletePreviousLeafNodes(keysToDelete)
 		// reset common.KeysToDelete
 		common.KeysToDelete = make([]common.Hash, 0)
+		// reset common.AlreadyRestored (joonha)
+		common.AlreadyRestored = make(map[Hash]Empty) 
 	}
 
 	// inactivate inactive accounts (jmlee)
