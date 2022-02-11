@@ -124,12 +124,8 @@ func (t *SecureTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWri
 // key in a trie with the given root hash. VerifyProof returns an error if the
 // proof contains invalid trie nodes or the wrong value.
 func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader) (value []byte, err error) {
-	fmt.Println("VP key: ", key) // joonha
 	key = keybytesToHex(key)
 	wantHash := rootHash
-	fmt.Println("VP keybytesToHex: ", key) // joonha
-	fmt.Println("VP wantHash: ", wantHash) // joonha
-	fmt.Println("VP wantHash[:]: ", wantHash[:]) // joonha
 	for i := 0; ; i++ {
 		buf, _ := proofDb.Get(wantHash[:])
 		if buf == nil {
@@ -156,12 +152,8 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader)
 
 // Only difference with VerifyProof is proofDb's type (joonha)
 func VerifyProof_ProofList(rootHash common.Hash, key []byte, proofDb common.ProofList) (value []byte, err error) {
-	fmt.Println("VP key: ", key) // joonha
 	key = keybytesToHex(key)
 	wantHash := rootHash
-	fmt.Println("VP keybytesToHex: ", key) // joonha
-	fmt.Println("VP wantHash: ", wantHash) // joonha
-	fmt.Println("VP wantHash[:]: ", wantHash[:]) // joonha
 	for i := 0; ; i++ {
 		buf, _ := proofDb.Get(wantHash[:])
 		if buf == nil {
@@ -186,8 +178,7 @@ func VerifyProof_ProofList(rootHash common.Hash, key []byte, proofDb common.Proo
 	}
 }
 
-// TODO(joonha): do construct this
-// (under construction) for proof optimization utilizing only the top node of merkle proof (joonha)
+// optimized above proving function to compare only the top node of the merkleProof and the blockRoot (joonha)
 func VerifyProof_restore(rootHash common.Hash, proofDb common.ProofList) (value []byte, err error) {
 	wantHash := rootHash
 

@@ -422,16 +422,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			/***************************************/
 			// if the retrieved Key is not equal to the 'inactiveKey' claimed by the requester,
 			// do not proceed and exit with the err msg.
-			//
-			// (1) 복원한 키 값이 기존에 사용된 리스트에 포함되어 있는지 확인함.
-			// (2) 기존에 사용된 적이 없으면 VerifyProof를 수행함.
-			// (3) 유효한 머클 검증인 경우 '사용된 머클 검증'에 그 키 값을 저장하여 재사용을 방지함.
-			_, merkleErr := trie.VerifyProof_ProofList(blockHeader.Root, inactiveKey.Bytes(), merkleProof_1)
-			
-			// TODO: 루트와 탑노드만 비교하도록 최적화. 현재는 전체에 대해서 VerifyProof를 하고 있음.
 
-			// blockHeader.Root가 merkleProof 맨 윗노드의 해시값과 같은지만 검사하면 됨.
-			// n, merkleErr := trie.VerifyProof_restore(blockHeader.Root, merkleProof_1)
+			// _, merkleErr := trie.VerifyProof_ProofList(blockHeader.Root, inactiveKey.Bytes(), merkleProof_1)
+			
+			// optimized above proving function to compare only the top node of the merkleProof and the blockRoot.
+			// (because the inactiveKey was made from the merkleProof, so no need to check its existence.)
+			_, merkleErr := trie.VerifyProof_restore(blockHeader.Root, merkleProof_1)
 
 			if merkleErr != nil {
 				// bad merkle proof. something is wrong
