@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
@@ -249,6 +248,8 @@ func (t *SecureTrie) MyTryUpdate(key, value []byte, txHash common.Hash, addr com
 		slotHash := common.BytesToHash(hk)
 		writeContractAccountSlotHash(common.GlobalTxHash, slotHash, CAaddress)
 	}
+	return nil
+}
 
 // set key as I want to implement Ethane (jmlee)
 func (t *SecureTrie) TryUpdate_SetKey(key, value []byte) error {
@@ -367,6 +368,8 @@ func (t *SecureTrie) InspectTrie() TrieInspectResult {
 
 func (t *SecureTrie) InspectStorageTrie() TrieInspectResult {
 	return t.trie.InspectStorageTrie()
+}
+
 // print trie nodes details in human readable form (jmlee)
 func (t *SecureTrie) Print() {
 	t.trie.Print()
@@ -400,12 +403,4 @@ func (t *SecureTrie) MyCommit() {
 // get last key among leaf nodes (i.e., right-most key value) (jmlee)
 func (t *SecureTrie) GetLastKey() *big.Int {
 	return t.trie.GetLastKey()
-}
-
-func (t *SecureTrie) InspectTrie() TrieInspectResult {
-	return t.trie.InspectTrie()
-}
-
-func (t *SecureTrie) InspectStorageTrie() TrieInspectResult {
-	return t.trie.InspectStorageTrie()
 }

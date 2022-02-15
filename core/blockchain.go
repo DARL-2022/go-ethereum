@@ -680,55 +680,55 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	return nil
 }
 
-// GasLimit returns the gas limit of the current HEAD block.
-func (bc *BlockChain) GasLimit() uint64 {
-	return bc.CurrentBlock().GasLimit()
-}
+// // GasLimit returns the gas limit of the current HEAD block.
+// func (bc *BlockChain) GasLimit() uint64 {
+// 	return bc.CurrentBlock().GasLimit()
+// }
 
-// CurrentBlock retrieves the current head block of the canonical chain. The
-// block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) CurrentBlock() *types.Block {
-	return bc.currentBlock.Load().(*types.Block)
-}
+// // CurrentBlock retrieves the current head block of the canonical chain. The
+// // block is retrieved from the blockchain's internal cache.
+// func (bc *BlockChain) CurrentBlock() *types.Block {
+// 	return bc.currentBlock.Load().(*types.Block)
+// }
 
-// flag(joonha)
-// Snapshots returns the blockchain snapshot tree.
-func (bc *BlockChain) Snapshots() *snapshot.Tree {
-	return bc.snaps
-	// return bc.snaps_inactive // (joonha)
-}
+// // flag(joonha)
+// // Snapshots returns the blockchain snapshot tree.
+// func (bc *BlockChain) Snapshots() *snapshot.Tree {
+// 	return bc.snaps
+// 	// return bc.snaps_inactive // (joonha)
+// }
 
-// CurrentFastBlock retrieves the current fast-sync head block of the canonical
-// chain. The block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) CurrentFastBlock() *types.Block {
-	return bc.currentFastBlock.Load().(*types.Block)
-}
+// // CurrentFastBlock retrieves the current fast-sync head block of the canonical
+// // chain. The block is retrieved from the blockchain's internal cache.
+// func (bc *BlockChain) CurrentFastBlock() *types.Block {
+// 	return bc.currentFastBlock.Load().(*types.Block)
+// }
 
-// Validator returns the current validator.
-func (bc *BlockChain) Validator() Validator {
-	return bc.validator
-}
+// // Validator returns the current validator.
+// func (bc *BlockChain) Validator() Validator {
+// 	return bc.validator
+// }
 
-// Processor returns the current processor.
-func (bc *BlockChain) Processor() Processor {
-	return bc.processor
-}
+// // Processor returns the current processor.
+// func (bc *BlockChain) Processor() Processor {
+// 	return bc.processor
+// }
 
-// State returns a new mutable state based on the current HEAD block.
-func (bc *BlockChain) State() (*state.StateDB, error) {
-	return bc.StateAt(bc.CurrentBlock().Root())
-}
+// // State returns a new mutable state based on the current HEAD block.
+// func (bc *BlockChain) State() (*state.StateDB, error) {
+// 	return bc.StateAt(bc.CurrentBlock().Root())
+// }
 
-// StateAt returns a new mutable state based on a particular point in time.
-func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
-	// return state.New(root, bc.stateCache, bc.snaps) // --> original code
-	return state.New_inactiveSnapshot(root, bc.stateCache, bc.snaps, bc.snaps_inactive) // (joonha)
-}
+// // StateAt returns a new mutable state based on a particular point in time.
+// func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
+// 	// return state.New(root, bc.stateCache, bc.snaps) // --> original code
+// 	return state.New_inactiveSnapshot(root, bc.stateCache, bc.snaps, bc.snaps_inactive) // (joonha)
+// }
 
-// StateCache returns the caching database underpinning the blockchain instance.
-func (bc *BlockChain) StateCache() state.Database {
-	return bc.stateCache
-}
+// // StateCache returns the caching database underpinning the blockchain instance.
+// func (bc *BlockChain) StateCache() state.Database {
+// 	return bc.stateCache
+// }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
 func (bc *BlockChain) Reset() error {
@@ -1299,7 +1299,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// archive node는 여기에서 매 블록마다 trie nodes를 flush 시키는 거임 (jmlee)
 		// fmt.Println("archive node flush -> trie root:", root.Hex())
 		if err := triedb.Commit(root, false, nil); err != nil { // here, write trie changes to disk (joonha)
-			return NonStatTy, err
+			// return NonStatTy, err
+			return err
 		}
 	} else {
 		// Full but not archive node, do proper garbage collection

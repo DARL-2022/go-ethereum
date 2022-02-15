@@ -593,8 +593,9 @@ func (w *worker) mainLoop() {
 				}
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
-				// just applay transactions to the pending state when we're not mining (jmlee)
-				w.commitTransactions(txset, coinbase, nil)
+				// // just applay transactions to the pending state when we're not mining (jmlee)
+				// w.commitTransactions(txset, coinbase, nil)
+				w.commitTransactions(w.current, txset, nil)
 
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
@@ -831,8 +832,8 @@ func (w *worker) updateSnapshot(env *environment) {
 
 // look inside the commitTransaction, commitTransactions functions when realizing restoration (joonha) (ethane)
 
-func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
-	snap := w.current.state.Snapshot()
+func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
+	snap := env.state.Snapshot()
 
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
@@ -1026,7 +1027,12 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	// Note genParams.coinbase can be different with header.Coinbase
 	// since clique algorithm can modify the coinbase field in header.
 	env, err := w.makeEnv(parent, header, genParams.coinbase)
-	common.CheckpointKeys[header.Number.Int64()] = w.current.state.NextKey // save this block's initial NextKey
+	
+	// fmt.Println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+	// fmt.Println("w.current.state.NextKey: ", w.current.state.NextKey)
+	// common.CheckpointKeys[header.Number.Int64()] = w.current.state.NextKey // save this block's initial NextKey
+	// fmt.Println("common.CheckpointKeys[header.Number.Int64()]: ", common.CheckpointKeys[header.Number.Int64()])
+
 	if err != nil {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
@@ -1080,7 +1086,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 	}
 
 	// delete previous leaf nodes (jmlee)
-	if header.Number.Int64() % common.DeleteLeafNodeEpoch == 0 {
+	if env.header.Number.Int64() % common.DeleteLeafNodeEpoch == 0 {
 		keysToDelete := append(common.KeysToDelete, w.current.state.KeysToDeleteDirty...)
 		w.current.state.DeletePreviousLeafNodes(keysToDelete)
 		// reset common.KeysToDelete
@@ -1090,13 +1096,13 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) {
 	}
 
 	// inactivate inactive accounts (jmlee)
-	if header.Number.Int64() % common.InactivateLeafNodeEpoch == 0 {
-		lastKeyToCheck := common.CheckpointKeys[header.Number.Int64()-common.InactivateCriterion+1]
+	if env.header.Number.Int64() % common.InactivateLeafNodeEpoch == 0 {
+		lastKeyToCheck := common.CheckpointKeys[env.header.Number.Int64()-common.InactivateCriterion+1]
 		inactivatedAccountsNum := w.current.state.InactivateLeafNodes(common.InactiveBoundaryKey, lastKeyToCheck)
 		common.InactiveBoundaryKey += inactivatedAccountsNum
 	}
 
-	w.commit(uncles, w.fullTaskHook, true, tstart)
+	// w.commit(uncles, w.fullTaskHook, true, tstart)
 }
 
 // generateWork generates a sealing block based on the given parameters.
@@ -1147,6 +1153,13 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 		w.current.discard()
 	}
 	w.current = work
+
+	fmt.Println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+	fmt.Println("w.current.state.NextKey: ", w.current.state.NextKey)
+	fmt.Println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+	common.CheckpointKeys[work.header.Number.Int64()] = w.current.state.NextKey // save this block's initial NextKey
+	fmt.Println("common.CheckpointKeys[work.header.Number.Int64()]: ", common.CheckpointKeys[work.header.Number.Int64()])
+
 }
 
 // commit runs any post-transaction state modifications, assembles the final block

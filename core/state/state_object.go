@@ -140,7 +140,7 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
 		txHash:         common.Hash{}, //jhkim
-		dirtyStorage_inactive: make(Storage), // (joonha)
+		// dirtyStorage_inactive: make(Storage), // (joonha)
 	}
 	// original code
 	// return &stateObject{
@@ -630,7 +630,7 @@ func (s *stateObject) CommitTrie_hashedKey(db Database) error {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
 	}
-	root, err := s.trie.Commit(nil)
+	root, _, err := s.trie.Commit(nil)
 	if err == nil {
 		s.data.Root = root
 	}
@@ -777,24 +777,24 @@ func (s *stateObject) Value() *big.Int {
 	panic("Value on stateObject should never be called")
 }
 
-// NewObject creates a state object, just for experiment (jmlee)
-func NewObject(db *StateDB, address common.Address, data Account) *stateObject {
-	if data.Balance == nil {
-		data.Balance = new(big.Int)
-	}
-	if data.CodeHash == nil {
-		data.CodeHash = emptyCodeHash
-	}
-	data.Addr = address // (joonha)
-	return &stateObject{
-		db:            db,
-		address:       address,
-		addrHash:      crypto.Keccak256Hash(address[:]),
-		data:          data,
-		originStorage: make(Storage),
-		dirtyStorage:  make(Storage),
-	}
-}
+// // NewObject creates a state object, just for experiment (jmlee)
+// func NewObject(db *StateDB, address common.Address, data Account) *stateObject {
+// 	if data.Balance == nil {
+// 		data.Balance = new(big.Int)
+// 	}
+// 	if data.CodeHash == nil {
+// 		data.CodeHash = emptyCodeHash
+// 	}
+// 	data.Addr = address // (joonha)
+// 	return &stateObject{
+// 		db:            db,
+// 		address:       address,
+// 		addrHash:      crypto.Keccak256Hash(address[:]),
+// 		data:          data,
+// 		originStorage: make(Storage),
+// 		dirtyStorage:  make(Storage),
+// 	}
+// }
 
 // // DeleteSlot deletes slot given the slotKey (joonha)
 // func (s *stateObject) DeleteSlot(slotKey common.Hash) {

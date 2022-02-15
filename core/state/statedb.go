@@ -903,7 +903,8 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 					fmt.Println("  cannot find the address at the snapshot")
 					return nil
 				}
-				data = &Account{
+				// data = &Account{
+				data = &types.StateAccount {
 					Nonce:    acc.Nonce,
 					Balance:  acc.Balance,
 					CodeHash: acc.CodeHash,
@@ -933,7 +934,8 @@ func (s *StateDB) getDeletedStateObject(addr common.Address, restoring int64) *s
 				fmt.Println("cannot find the address outside of the snapshot (1)")
 				return nil
 			}
-			data = new(Account)
+			// data = new(Account)
+			data = new(types.StateAccount)
 			if err := rlp.DecodeBytes(enc, data); err != nil {
 				log.Error("Failed to decode state object", "addr", addr, "err", err)
 				return nil
@@ -1074,7 +1076,8 @@ func (s *StateDB) createObject(addr common.Address, blockNum *big.Int) (newobj, 
 			}
 		}
 	}
-	newobj = newObject(s, addr, Account{})
+	// newobj = newObject(s, addr, Account{})
+	newobj = newObject(s, addr, types.StateAccount{})
 	newobj.setNonce(0) // sets the object to dirty
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
@@ -1833,6 +1836,8 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 // jhkim
 func (s *StateDB) GetStateObjects() map[common.Address]*stateObject {
 	return s.stateObjects
+}
+
 // DeletePreviousLeafNodes deletes previous leaf nodes from state trie (jmlee)
 func (s *StateDB) DeletePreviousLeafNodes(keysToDelete []common.Hash) {
 	fmt.Println("\ntrie root before delete leaf nodes:", s.trie.Hash().Hex())
@@ -1973,7 +1978,7 @@ func (s *StateDB) InactivateLeafNodes(inactiveBoundaryKey, lastKeyToCheck int64)
 }
 
 // GetAccount returns Account from stateObject (joonha)
-func (s *StateDB) GetAccount(addr common.Address) *Account {
+func (s *StateDB) GetAccount(addr common.Address) *types.StateAccount {
 	return &s.getStateObject(addr).data
 }
 
