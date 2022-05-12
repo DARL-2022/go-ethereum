@@ -4,7 +4,8 @@ make geth
 cd build/bin
 
 
-DataDir="/ssd/ethereum"
+# DataDir="/ssd/ethereum" # lynx
+DataDir="/ethereum/geth" # procyon
 
 
 

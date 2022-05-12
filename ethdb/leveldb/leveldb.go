@@ -467,7 +467,8 @@ func (b *batch) Put(key, value []byte) error {
 
 //jhkim: Put2 uses blocknumber to print specific block's batch.write
 func (b *batch) Put2(key, value []byte, blocknumber int) error {
-	b.b.Put2(key, value, blocknumber)
+	// b.b.Put2(key, value, blocknumber) // should add Put2 function in syndtr/goleveldb/leveldb/batch.go
+	b.b.Put(key, value)
 	b.size += len(key) + len(value)
 	return nil
 }
