@@ -1,3 +1,17 @@
+## MPT Simulator
+
+to run simulator
+```shell
+cd simulator
+go run mpt_simulator.go
+```
+
+to run client
+```shell
+cd build/bin/experiment
+python3 mptSimulation.py
+```
+
 ## Go Ethereum
 
 Official Golang implementation of the Ethereum protocol.
