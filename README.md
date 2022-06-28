@@ -1,12 +1,12 @@
 ## MPT Simulator
 
-to run simulator
+to run simulator (go version go1.18.3)
 ```shell
 cd simulator
 go run mpt_simulator.go
 ```
 
-to run client
+to run client (Python 3.6.9)
 ```shell
 cd build/bin/experiment
 python3 mptSimulation.py
